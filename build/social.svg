@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <defs>
+    <radialGradient id="disc" cx="34%" cy="28%" r="80%">
+      <stop offset="0" stop-color="#ffe066"/>
+      <stop offset="0.55" stop-color="#ffcc33"/>
+      <stop offset="1" stop-color="#f5a800"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#ffb000" stop-opacity="0.32"/>
+      <stop offset="0.6" stop-color="#ff5a1f" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ff5a1f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="640" fill="#0d0d0d"/>
+  <circle cx="330" cy="320" r="330" fill="url(#glow)"/>
+  <svg x="150" y="140" width="360" height="360" viewBox="0 0 512 512">
+    <circle cx="256" cy="256" r="236" fill="url(#disc)"/>
+    <path d="M291.73 73.46 A186 186 0 1 0 434.69 205.82" fill="none" stroke="#161616" stroke-width="18" stroke-linecap="round"/>
+    <path d="M220.28 393.76 A142 142 0 1 0 121.53 302.27" fill="none" stroke="#161616" stroke-width="18" stroke-linecap="round"/>
+    <circle cx="256" cy="256" r="94" fill="#161616"/>
+    <path d="M236 217 L236 295 L299 256 Z" fill="#ffcc33" stroke="#ffcc33" stroke-width="18" stroke-linejoin="round"/>
+  </svg>
+  <g font-family="Segoe UI Variable Display, Segoe UI, system-ui, sans-serif" fill="#ffffff">
+    <text x="590" y="290" font-size="92" font-weight="700" letter-spacing="-2">YM Classic</text>
+    <text x="594" y="350" font-size="28" fill="#bdbdbd">An open-source Yandex Music client for Windows</text>
+    <g font-size="23" font-weight="600" fill="#ffcc33">
+      <text x="594" y="420">My Wave without repeats · Uncensored · Lyrics · FLAC</text>
+    </g>
+  </g>
+</svg>
