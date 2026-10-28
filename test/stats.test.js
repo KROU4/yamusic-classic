@@ -33,6 +33,25 @@ describe("статистика", () => {
     expect(s.byDay.at(-1).seconds).toBe(60);
   });
 
+  it("первый день окна учитывается целиком, с локальной полуночи", () => {
+    // now = 20:00 UTC; окно 7 дней начинается в 00:00 UTC шесть дней назад
+    const firstDayMorning = Date.UTC(2026, 9, 22, 1, 0, 0);
+    const beforeWindow = Date.UTC(2026, 9, 21, 23, 0, 0);
+    const s = computeStats(
+      [
+        { id: "1", t: "a", a: [[1, "x"]], s: 100, ts: firstDayMorning },
+        { id: "2", t: "b", a: [[1, "x"]], s: 50, ts: beforeWindow },
+      ],
+      { days: 7, now },
+    );
+    expect(s.totalSeconds).toBe(100);
+    expect(s.byDay[0]).toEqual({ day: "2026-10-22", seconds: 100 });
+    // в UTC+3 (tz = -180) те же события — уже другие локальные дни
+    const msk = computeStats([{ id: "1", t: "a", a: [[1, "x"]], s: 100, ts: beforeWindow }], { days: 7, now, tzOffsetMin: -180 });
+    expect(msk.totalSeconds).toBe(100);
+    expect(msk.byDay[0].day).toBe("2026-10-22");
+  });
+
   it("пустой журнал", () => {
     const s = computeStats([], { days: 30, now });
     expect(s).toMatchObject({ plays: 0, totalSeconds: 0, streak: 0, peakHour: null });

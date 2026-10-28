@@ -273,10 +273,12 @@ export class Service {
   async playlist(uid, kind) {
     this.requireAuth();
     const r = await this.api.playlist(uid, kind);
-    let tracks = (r.tracks || []).map((x) => normTrack(x.track)).filter(Boolean);
-    // rich-tracks иногда возвращает только id — догружаем
-    const missing = (r.tracks || []).filter((x) => !x.track).map((x) => x.id);
-    if (missing.length) tracks = tracks.concat(await this.fullTracks(missing));
+    const entries = r.tracks || [];
+    // rich-tracks иногда возвращает только id — догружаем, сохраняя исходный порядок:
+    // индекс на экране должен совпадать с позицией в плейлисте (удаление трека бьёт по индексу)
+    const missing = entries.filter((x) => !x.track).map((x) => String(x.id));
+    const loaded = missing.length ? new Map((await this.fullTracks(missing)).map((t) => [t.id, t])) : new Map();
+    const tracks = entries.map((x) => (x.track ? normTrack(x.track) : loaded.get(String(x.id)) || null)).filter(Boolean);
     return { playlist: { ...normPlaylist(r), cover: coverUrl(r.cover?.uri || r.ogImage, 400) }, tracks: this.decorate(tracks) };
   }
 

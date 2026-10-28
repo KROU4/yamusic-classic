@@ -33,7 +33,9 @@ export class PlayLog {
 
 /** Сводка за последние `days` дней. Чистая функция — удобно тестировать. */
 export function computeStats(entries, { days = 7, now = Date.now(), tzOffsetMin = 0 } = {}) {
-  const from = now - days * DAY;
+  // окно начинается с локальной полуночи (days-1) дней назад: первый столбец «по дням» — полный день
+  const localNow = now - tzOffsetMin * 60000;
+  const from = Math.floor(localNow / DAY) * DAY - (days - 1) * DAY + tzOffsetMin * 60000;
   const list = entries.filter((e) => e.ts >= from && e.ts <= now);
   const artists = new Map();
   const tracks = new Map();

@@ -56,7 +56,7 @@ function loadBounds() {
 function saveBounds() {
   if (!win) return;
   // в мини-режиме запоминаем обычный размер, а не крошечное окно
-  const b = miniMode && normalBounds ? { ...normalBounds, maximized: false } : { ...win.getNormalBounds(), maximized: win.isMaximized() };
+  const b = miniMode && normalBounds ? normalBounds : { ...win.getNormalBounds(), maximized: win.isMaximized() };
   try {
     fs.writeFileSync(boundsFile, JSON.stringify(b));
   } catch {
@@ -145,7 +145,8 @@ function createTray() {
 function setMini(on) {
   if (!win || on === miniMode) return;
   if (on) {
-    normalBounds = win.isMaximized() ? null : win.getBounds();
+    // всегда помним обычный прямоугольник окна и был ли он развёрнут — и для возврата, и для saveBounds
+    normalBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
     if (win.isMaximized()) win.unmaximize();
     miniMode = true;
     win.setMinimumSize(300, 460);
@@ -157,8 +158,11 @@ function setMini(on) {
     miniMode = false;
     win.setAlwaysOnTop(false);
     win.setMinimumSize(FULL_MIN.width, FULL_MIN.height);
-    if (normalBounds) win.setBounds(normalBounds);
-    else win.maximize();
+    if (normalBounds) {
+      const { maximized, ...rect } = normalBounds;
+      win.setBounds(rect);
+      if (maximized) win.maximize();
+    }
   }
 }
 
@@ -279,6 +283,10 @@ function createWindow(url, key) {
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
   win.on("show", updateThumbar);
+  // выключение/выход из Windows: before-quit не приходит, а «свернуть в трей» не должно мешать закрытию
+  win.on("session-end", () => {
+    quitting = true;
+  });
 
   // перед закрытием окно отправляет текущее прослушивание в историю (анти-повтор и отчёт Яндексу)
   let finalized = false;

@@ -25,31 +25,36 @@ export class DiscordPresence {
     this.ready = false;
     this.pending = null; // последняя активность, отправим после подключения
     this.retryTimer = null;
+    this.gen = 0;
+    this.connecting = null;
+    this.buffer = Buffer.alloc(0);
   }
 
   connect(clientId) {
     if (this.clientId === clientId && (this.sock || this.connecting)) return this.connecting || Promise.resolve();
     this.disconnect();
     this.clientId = clientId;
+    // поколение подключения: выключили и сразу включили — старая попытка не должна оставить второй сокет
+    const gen = ++this.gen;
     // одно подключение за раз: повторные вызовы во время перебора каналов ждут его же
-    this.connecting = this.tryConnect(clientId).finally(() => {
-      this.connecting = null;
+    const p = this.tryConnect(clientId, gen).finally(() => {
+      if (this.connecting === p) this.connecting = null;
     });
-    return this.connecting;
+    this.connecting = p;
+    return p;
   }
 
-  async tryConnect(clientId) {
+  async tryConnect(clientId, gen) {
     for (let i = 0; i < 10; i++) {
       const s = await new Promise((resolve) => {
         const sock = net.createConnection(pipePath(i), () => resolve(sock));
         sock.once("error", () => resolve(null));
       });
-      if (!s) continue;
-      // пока подключались, настройку могли выключить или сменить ID
-      if (this.clientId !== clientId) {
-        s.destroy();
+      if (gen !== this.gen) {
+        s?.destroy();
         return;
       }
+      if (!s) continue;
       this.sock = s;
       this.buffer = Buffer.alloc(0);
       s.on("data", (buf) => this.onData(buf));
@@ -59,7 +64,7 @@ export class DiscordPresence {
       return;
     }
     // Discord не запущен — попробуем позже
-    if (this.clientId === clientId) this.scheduleRetry();
+    if (gen === this.gen) this.scheduleRetry();
   }
 
   onData(chunk) {
@@ -111,6 +116,8 @@ export class DiscordPresence {
   disconnect() {
     clearTimeout(this.retryTimer);
     const s = this.sock;
+    this.gen++; // отменяет идущий перебор каналов
+    this.connecting = null;
     this.clientId = null;
     this.sock = null;
     this.ready = false;

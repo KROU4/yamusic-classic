@@ -55,8 +55,10 @@ const TARGET_LUFS = -14; // ориентир громкости стриминг
 let session = null; // учёт текущего прослушивания
 let loadToken = 0;
 let waveFetching = null;
-let fade = null; // активный кроссфейд: { old, timer }
+let fade = null; // активный кроссфейд: { old, oldTrack, timer }
 let fadeMul = 1; // множитель громкости входящего трека во время кроссфейда
+let sleepMul = 1; // множитель затухания таймера сна (отдельно от кроссфейда, чтобы не драться за громкость)
+let sleepFadeTimer = null;
 
 const playable = (t) => t && (t.available || t.substituted?.available);
 
@@ -80,17 +82,32 @@ function targetVolume(track) {
   return muted.value ? 0 : volume.value * loudnessFactor(track);
 }
 
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
 function applyVolume() {
-  audio.volume = Math.max(0, Math.min(1, targetVolume(current.value) * fadeMul));
+  audio.volume = clamp01(targetVolume(current.value) * fadeMul * sleepMul);
 }
 
-async function resolveTrack(track) {
-  const hit = resolved.get(track.id);
-  if (hit && Date.now() - hit.at < RESOLVE_TTL) return hit;
-  const r = await api.post("/play/resolve", { track });
-  const entry = { ...r, at: Date.now() };
-  resolved.set(track.id, entry);
-  return entry;
+const isFresh = (id) => {
+  const hit = resolved.get(id);
+  return !!hit && Date.now() - hit.at < RESOLVE_TTL;
+};
+const resolving = new Map(); // trackId -> Promise: один запрос на трек, сколько бы раз его ни попросили
+const prefetchFailedAt = new Map(); // trackId -> время неудачной предзагрузки
+
+function resolveTrack(track) {
+  if (isFresh(track.id)) return Promise.resolve(resolved.get(track.id));
+  if (resolving.has(track.id)) return resolving.get(track.id);
+  const p = api
+    .post("/play/resolve", { track })
+    .then((r) => {
+      const entry = { ...r, at: Date.now() };
+      resolved.set(track.id, entry);
+      return entry;
+    })
+    .finally(() => resolving.delete(track.id));
+  resolving.set(track.id, p);
+  return p;
 }
 
 function startSession(track) {
@@ -141,8 +158,9 @@ function skipUnplayable(message) {
     toast("Доступных для воспроизведения треков не нашлось");
     return;
   }
-  // асинхронно, чтобы цепочка пропусков не превращалась в синхронную рекурсию
-  setTimeout(() => next({ auto: true }), 0);
+  // асинхронно, чтобы цепочка пропусков не превращалась в синхронную рекурсию;
+  // reason: "error" — это не «трек доигран», таймер сна «до конца трека» на него не реагирует
+  setTimeout(() => next({ auto: true, reason: "error" }), 0);
 }
 
 /** Трек мог быть заменён версией без цензуры — подставляем в очередь то, что играет на самом деле. */
@@ -212,13 +230,13 @@ function startCrossfade() {
   const seconds = audioConfig.value.crossfade;
   const i = index.value + 1;
   const nextTrack = queue.value[i];
-  const entry = nextTrack && resolved.get(nextTrack.id);
-  if (!entry || Date.now() - entry.at > RESOLVE_TTL) return false;
+  if (!nextTrack || !playable(nextTrack) || !isFresh(nextTrack.id)) return false;
+  const entry = resolved.get(nextTrack.id);
 
   finishSession("ended");
   loadToken++;
   const old = audio;
-  const startOldVolume = old.volume;
+  const oldTrack = current.value;
   const incoming = createElement();
   incoming.src = entry.stream.url;
 
@@ -238,8 +256,9 @@ function startCrossfade() {
   const t0 = performance.now();
   const timer = setInterval(() => {
     const k = Math.min(1, (performance.now() - t0) / (seconds * 1000));
-    // равная мощность: косинус/синус, без провала громкости посередине
-    old.volume = Math.max(0, startOldVolume * Math.cos((k * Math.PI) / 2));
+    // равная мощность: косинус/синус, без провала громкости посередине.
+    // Громкость старого трека считается заново на каждом шаге — mute и ползунок действуют и на него
+    old.volume = clamp01(targetVolume(oldTrack) * sleepMul * Math.cos((k * Math.PI) / 2));
     fadeMul = Math.sin((k * Math.PI) / 2);
     applyVolume();
     if (k >= 1) {
@@ -252,7 +271,7 @@ function startCrossfade() {
       applyVolume();
     }
   }, 50);
-  fade = { old, timer };
+  fade = { old, oldTrack, timer };
   return true;
 }
 
@@ -334,10 +353,12 @@ function maybeExtendWave() {
   return p;
 }
 
-export async function next({ auto = false } = {}) {
-  finishSession(auto ? "ended" : "skip");
+/** auto — трек сменился сам; reason: "error" — пропуск недоступного/сломанного трека, а не «доиграл». */
+export async function next({ auto = false, reason } = {}) {
+  const finished = auto && reason !== "error";
+  finishSession(finished ? "ended" : "skip");
   // таймер «до конца трека»: доиграли — останавливаемся
-  if (auto && sleepTimer.value?.mode === "track") {
+  if (finished && sleepTimer.value?.mode === "track") {
     sleepTimer.value = null;
     audio.pause();
     playing.value = false;
@@ -376,8 +397,10 @@ export function toggle() {
   // после перезапуска приложения волна продолжается новой сессией, а не одним сохранённым треком
   if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
   if (!audio.src) return load(index.value);
-  if (audio.paused) audio.play().catch(() => {});
-  else {
+  if (audio.paused) {
+    cancelSleepFade(); // «Играть» во время затухания таймера сна — значит, спать передумали
+    audio.play().catch(() => {});
+  } else {
     cancelFade();
     audio.pause();
   }
@@ -423,10 +446,19 @@ export function setAudioConfig(patch) {
 // ---------- таймер сна ----------
 let sleepInterval = null;
 
+function cancelSleepFade() {
+  if (!sleepFadeTimer) return;
+  clearInterval(sleepFadeTimer);
+  sleepFadeTimer = null;
+  sleepMul = 1;
+  applyVolume();
+}
+
 /** minutes: число минут, "track" — до конца текущего трека, null — выключить. */
 export function setSleepTimer(minutes) {
   clearInterval(sleepInterval);
   sleepInterval = null;
+  cancelSleepFade();
   if (minutes == null) {
     sleepTimer.value = null;
     return;
@@ -444,16 +476,19 @@ export function setSleepTimer(minutes) {
     if (Date.now() < st.at) return;
     clearInterval(sleepInterval);
     sleepTimer.value = null;
+    // идущий кроссфейд дожимаем сразу: затухает только один трек
+    cancelFade();
     // мягкое затухание за 8 секунд, а не резкий обрыв
     const start = performance.now();
-    const t = setInterval(() => {
+    sleepFadeTimer = setInterval(() => {
       const k = Math.min(1, (performance.now() - start) / 8000);
-      fadeMul = 1 - k;
+      sleepMul = 1 - k;
       applyVolume();
       if (k >= 1) {
-        clearInterval(t);
+        clearInterval(sleepFadeTimer);
+        sleepFadeTimer = null;
         audio.pause();
-        fadeMul = 1;
+        sleepMul = 1;
         applyVolume();
         toast("Таймер сна: спокойной ночи");
       }
@@ -466,12 +501,14 @@ export function enqueueNext(tracks) {
   list.splice(index.value + 1, 0, ...tracks);
   queue.value = list;
   if (index.value < 0) load(0);
+  else persistQueue();
   toast(tracks.length > 1 ? "Добавлено в очередь" : `«${tracks[0].title}» будет следующим`);
 }
 
 export function enqueueEnd(tracks) {
   queue.value = [...queue.value, ...tracks];
   if (index.value < 0) load(0);
+  else persistQueue();
   toast(tracks.length > 1 ? `Добавлено в конец очереди: ${tracks.length}` : `«${tracks[0].title}» — в конце очереди`);
 }
 
@@ -479,8 +516,11 @@ export function removeFromQueue(i) {
   if (i === index.value) return;
   const list = [...queue.value];
   list.splice(i, 1);
-  queue.value = list;
-  if (i < index.value) index.value -= 1;
+  batch(() => {
+    queue.value = list;
+    if (i < index.value) index.value -= 1;
+  });
+  persistQueue();
 }
 
 /** Перестановка в очереди (drag-and-drop в панели «Очередь»). */
@@ -498,6 +538,7 @@ export function moveInQueue(from, to) {
     queue.value = list;
     index.value = ni;
   });
+  persistQueue();
 }
 
 export async function like(track, value = !isLiked(track)) {
@@ -567,7 +608,10 @@ function attachListeners(el) {
     const xf = audioConfig.value.crossfade;
     // заранее получаем ссылку на следующий трек (с запасом на кроссфейд)
     const nxt = queue.value[index.value + 1];
-    if (nxt && dur - t < 25 + xf && !resolved.has(nxt.id) && playable(nxt)) resolveTrack(nxt).catch(() => {});
+    if (nxt && dur - t < 25 + xf && !isFresh(nxt.id) && playable(nxt) && Date.now() - (prefetchFailedAt.get(nxt.id) || 0) > 15000) {
+      // при ошибке не долбим сервер на каждом timeupdate — пауза 15 секунд
+      resolveTrack(nxt).catch(() => prefetchFailedAt.set(nxt.id, Date.now()));
+    }
     if (context.value?.type === "wave" && dur - t < 30) maybeExtendWave();
     // кроссфейд: не для повтора трека, не для таймера «до конца трека», не для коротких треков
     if (xf > 0 && !fade && !el.paused && repeat.value !== "one" && sleepTimer.value?.mode !== "track" && dur > xf * 3 && dur - t <= xf) startCrossfade();
@@ -580,7 +624,8 @@ function attachListeners(el) {
     }
   });
   on("ended", () => {
-    if (repeat.value === "one") {
+    // таймер сна «до конца трека» важнее повтора трека — иначе музыка не остановится никогда
+    if (repeat.value === "one" && sleepTimer.value?.mode !== "track") {
       finishSession("ended");
       startSession(current.value);
       el.currentTime = 0;

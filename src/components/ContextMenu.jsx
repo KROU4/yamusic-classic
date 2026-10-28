@@ -17,8 +17,9 @@ export function openTrackMenu(e, track, extra = {}) {
   // из кнопки «…» меню открывается под ней, из правого клика — у курсора
   const x = e.type === "contextmenu" || !r ? e.clientX : r.right;
   const y = e.type === "contextmenu" || !r ? e.clientY : r.bottom;
-  menu.value = { x, y, track, ...extra };
+  menu.value = { x, y, track, ...extra, seq: ++menuSeq };
 }
+let menuSeq = 0;
 
 const close = () => (menu.value = null);
 
@@ -82,28 +83,27 @@ function PlaylistPicker({ track, onDone }) {
   );
 }
 
+/** Каждое открытие — новый экземпляр (key), поэтому позиция и подменю сбрасываются сами. */
 export function ContextMenu() {
   const m = menu.value;
+  return m ? <MenuBody key={m.seq} m={m} /> : null;
+}
+
+function MenuBody({ m }) {
   const box = useRef(null);
   const [pos, setPos] = useState(null);
   const [sub, setSub] = useState(false);
 
-  useEffect(() => {
-    setSub(false);
-    setPos(null);
-  }, [m]);
-
-  // меню не должно вылезать за край окна
+  // меню не должно вылезать за край окна (пересчёт и при раскрытии подменю)
   useLayoutEffect(() => {
-    if (!m || !box.current) return;
+    if (!box.current) return;
     const r = box.current.getBoundingClientRect();
     const x = Math.min(m.x, window.innerWidth - r.width - 8);
     const y = m.y + r.height > window.innerHeight - 8 ? Math.max(8, m.y - r.height) : m.y;
-    setPos({ x: Math.max(8, x), y });
-  }, [m, sub]);
+    setPos({ x: Math.max(8, x), y: Math.max(8, y) });
+  }, [sub]);
 
   useEffect(() => {
-    if (!m) return;
     const onKey = (e) => e.key === "Escape" && close();
     const onDown = (e) => !box.current?.contains(e.target) && close();
     window.addEventListener("keydown", onKey);
@@ -116,9 +116,8 @@ export function ContextMenu() {
       window.removeEventListener("resize", close);
       document.querySelector(".main")?.removeEventListener("scroll", close);
     };
-  }, [m]);
+  }, []);
 
-  if (!m) return null;
   const t = m.track;
   const liked = player.isLiked(t);
   const act = (fn) => () => {
