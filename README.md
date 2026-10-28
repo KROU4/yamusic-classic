@@ -11,16 +11,18 @@ The user interface is in Russian, like the service it is built for. The code, co
 **Design**
 - The official layout and design tokens: a full-height sidebar (Home, Chart, New releases, Radio, Podcasts & books, Collection, Stats, "Liked", your pins and your Yandex avatar), a rounded content panel and a floating player bar tinted with the cover colour. The sidebar can collapse to icons.
 - **My Wave hero.**
-  - A generative, audio-reactive orb on its own WebGL shader, modelled on the official 2024 animation: drifting colour layers with a bright core, a soft bloom and light rays. The bass makes it breathe and stretches the rays.
-  - The colours follow the selected mood or activity, and liking a track makes it flash.
-  - Three modes: full, lite (CSS only) and off.
+  - The official orb: the client plays the My Wave animation loop of the **official app installed on the same PC** (read from its own files at runtime, nothing is bundled) and makes it react to the music — it breathes with the bass and flares on a like.
+  - Its hue follows the selected mood or activity.
+  - Modes: official (default when the official app is installed), own WebGL shader, lite (CSS only) and off.
   - It pauses when off-screen or minimised.
 - **Wave settings like in 2023.** Activity (waking up, workout, on the road, working, studying, party, falling asleep), character, mood and language. Changes apply live to the playing wave, and any combination can be pinned to the sidebar.
 - **My Wave from a text prompt.** Describe what you want ("спокойный джаз для работы") and the wave starts from it; prompts can be pinned too.
 - **My Wave for two.** Create an invite link or join one and listen to a shared wave with another person (needs the feature enabled for both accounts on Yandex's side).
 - **Pins.** Pin playlists, albums, artists and wave settings to the sidebar, then reorder them by dragging.
 - The home page has "For you" and "Trends" tabs, with genres, moods, activities and epochs.
-- A centred player bar, a full-screen "Now playing" view with karaoke lyrics (the wave animation plays behind it), a mini player, and dark and light themes.
+- A calm player bar: transport in the middle; lyrics, queue and volume on the right; source, quality, sleep timer, speed, equalizer and mini player behind «Ещё». Only non-default states (a running timer, a changed speed, FLAC) show as small chips.
+- Layouts for every window size Windows snapping produces — maximised, half, quarter and a third of a 1080p screen: the sidebar compacts and scrolls, the player turns into a compact bar with a thin seek line, Now Playing switches between cover and lyrics.
+- A full-screen "Now playing" view with karaoke lyrics, a mini player, and dark and light themes. Keyboard-operable sliders and visible focus everywhere.
 
 **Sound**
 - **Quality**: economy (HE-AAC 64), normal (AAC 192) or lossless. Lossless plays FLAC wherever Yandex offers it to your account: the encrypted stream (AES-128-CTR, key from the API) is decrypted on the fly by the local backend for playback only, with seeking.
