@@ -8,6 +8,9 @@ export const CLIENT_ID = "YandexMusicDesktopAppWindows/5.124.1";
 // Same order as in the official client: lossless codecs first
 export const CODECS = ["flac", "flac-mp4", "aac-mp4", "he-aac-mp4", "mp3", "aac", "he-aac"];
 
+// Test runs (YMC_NO_REPORT=1) must not feed listening reports into the user's Yandex recommendations
+const NO_REPORT = () => process.env.YMC_NO_REPORT === "1";
+
 export class ApiError extends Error {
   constructor(message, status, body) {
     super(message);
@@ -216,6 +219,7 @@ export class YandexMusic {
 
   /** Listening report: without it Yandex doesn't see the history and recommendations degrade. */
   playAudio({ trackId, albumId, from, playId, totalPlayedSeconds, endPositionSeconds, trackLengthSeconds, uid }) {
+    if (NO_REPORT()) return Promise.resolve({ skipped: true });
     const now = new Date().toISOString();
     return this.post("/play-audio", {
       form: {
@@ -257,6 +261,7 @@ export class YandexMusic {
     });
   }
   sessionFeedback(sessionId, batchId, event) {
+    if (NO_REPORT()) return Promise.resolve({ skipped: true });
     return this.post(`/rotor/session/${sessionId}/feedback/`, { json: { event, batchId } });
   }
 }

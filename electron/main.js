@@ -12,7 +12,15 @@ import { renderPng, SHAPES } from "./png.js";
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const t0 = Date.now();
 
-if (!app.requestSingleInstanceLock()) {
+// Smoke runs (YMC_SHOTS) live next to the user's own running client: a separate throwaway profile (no shared
+// history, settings or pins), no single-instance lock (which would pop the user's window up), no tray,
+// global hotkeys or autostart changes, and the window never takes focus
+const SMOKE = !!process.env.YMC_SHOTS;
+if (SMOKE) {
+  app.setPath("userData", path.join(app.getPath("temp"), "ymc-smoke-profile"));
+  process.env.YMC_NO_REPORT = "1"; // test plays stay out of the account's history and recommendations
+}
+else if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
@@ -192,6 +200,7 @@ function applyPrefs(p) {
   // register autostart only for the packaged app, otherwise the developer's electron.exe would end up in autostart
   // the portable build unpacks to a temp folder: write the portable exe itself to autostart
   // (same path/args on disable too, otherwise Windows won't find and remove the right entry)
+  if (SMOKE) return; // a test run must not touch the user's autostart entry or grab global hotkeys
   if (app.isPackaged) {
     const exe = process.env.PORTABLE_EXECUTABLE_FILE;
     app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"], ...(exe ? { path: exe } : {}) });
@@ -254,7 +263,7 @@ function createWindow(url, key) {
   });
   // smoke runs play real tracks but must stay silent (they run while the user is using the computer);
   // muting the page keeps the whole audio path working, analyser and EQ included. YMC_SHOTS_SOUND=1 to listen
-  if (process.env.YMC_SHOTS && process.env.YMC_SHOTS_SOUND !== "1") win.webContents.setAudioMuted(true);
+  if (SMOKE && process.env.YMC_SHOTS_SOUND !== "1") win.webContents.setAudioMuted(true);
   // maximize() on a hidden window shows it immediately, so maximize only in ready-to-show
   const startMaximized = !!b.maximized;
 
@@ -274,7 +283,8 @@ function createWindow(url, key) {
   win.once("ready-to-show", () => {
     // launch from autostart with "Start minimized": the window stays in the tray (only if a tray exists, otherwise the window is unreachable)
     const stayHidden = launchedHidden && prefs().startMinimized && !!tray && !process.env.YMC_SHOTS;
-    if (!stayHidden) {
+    if (SMOKE) win.showInactive(); // never steal focus from what the user is doing
+    else if (!stayHidden) {
       if (startMaximized) win.maximize(); // maximize also shows the window
       else win.show();
     } else if (startMaximized) {
@@ -386,7 +396,7 @@ app.whenReady().then(async () => {
     backend = await startBackend();
     log(`backend ready ${Date.now() - t0} ms after start`);
     createWindow(backend.url, backend.srv.key);
-    createTray();
+    if (!SMOKE) createTray();
     applyPrefs(prefs());
     backend.svc.onPrefs((next) => applyPrefs(next));
   } catch (e) {

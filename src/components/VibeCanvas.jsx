@@ -1,4 +1,5 @@
-// Generative animation for My Wave: soft flowing colors and expanding ripples.
+// Generative animation for My Wave: a soft glowing orb of drifting colour layers with light rays,
+// modelled on the look of the official 2024 client (own shader, not its code).
 // Custom WebGL shader; reacts to music via the audio graph analyzer, colors follow the wave's mood.
 // Modes: full (shader), lite (light CSS animation), off (static gradient). Without WebGL — lite.
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -8,18 +9,19 @@ import * as graph from "../player/audiograph.js";
 import * as p from "../player/engine.js";
 
 const PALETTES = {
-  default: ["#ffcf3a", "#ff5a36", "#b23cff"],
-  active: ["#ff9a1f", "#ff3b2f", "#ffd23f"],
-  fun: ["#ffe14d", "#3fd46b", "#ff5fa8"],
-  calm: ["#35d0c6", "#2f6bff", "#86e3ff"],
-  sad: ["#6a5cff", "#2b2f97", "#c08bff"],
-  "wake-up": ["#ffb36b", "#ff6f91", "#ffe08a"],
-  workout: ["#ff7a1a", "#ff2e4d", "#ffd23f"],
-  "road-trip": ["#ff8a3d", "#36bfff", "#ffd84d"],
-  "work-background": ["#47c2a8", "#3f7cff", "#a3e05c"],
-  "study-background": ["#5ad1b0", "#4a6bff", "#c6f06b"],
-  party: ["#ff3fa4", "#7b2fff", "#ffcf3f"],
-  "fall-asleep": ["#3b3f9e", "#6f5cff", "#1e8bc3"],
+  // core (center) → mid → rim → edge glow, as in the official orb: yellow heart, orange/red body, magenta fringe
+  default: ["#fff34d", "#ff8a1c", "#ff2a3d", "#c42fb3"],
+  active: ["#ffd23f", "#ff7a1a", "#ff3b2f", "#d6246e"],
+  fun: ["#fff15c", "#9be15d", "#ff5fa8", "#ffb13b"],
+  calm: ["#9ff3ff", "#35d0c6", "#2f6bff", "#6b4dff"],
+  sad: ["#d4b8ff", "#8a6bff", "#4b3fd1", "#2a2f97"],
+  "wake-up": ["#fff1a8", "#ffb36b", "#ff6f91", "#d45cff"],
+  workout: ["#ffe14d", "#ff7a1a", "#ff2e4d", "#b5179e"],
+  "road-trip": ["#ffe066", "#ff8a3d", "#36bfff", "#3d5cff"],
+  "work-background": ["#e0ff8a", "#a3e05c", "#47c2a8", "#3f7cff"],
+  "study-background": ["#f0ff9e", "#c6f06b", "#5ad1b0", "#4a6bff"],
+  party: ["#ffe14d", "#ff3fa4", "#a42fff", "#4b2fff"],
+  "fall-asleep": ["#b8c4ff", "#6f5cff", "#3b3f9e", "#1e8bc3"],
 };
 
 /** Colors from the wave settings: mood outranks activity; with no settings, the signature warm ones. */
@@ -31,40 +33,69 @@ export function paletteFor(settings) {
 }
 
 const VERT = `attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
+// A soft, irregular glowing orb: four translucent colour layers drift around the centre and overlap
+// (the overlaps make the "folds"), a bloom around it and a few long thin rays streaking out of the rim.
+// Bass breathes the orb and stretches the rays; overall energy speeds up the drift.
 const FRAG = `precision mediump float;
 uniform vec2 uRes;uniform float uTime,uEnergy,uBass,uPulse,uPlay;
-uniform vec3 uC0,uC1,uC2,uBg;
+uniform vec3 uC0,uC1,uC2,uC3,uBg;
 float h(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
 float n(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.-2.*f);
  return mix(mix(h(i),h(i+vec2(1,0)),u.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),u.x),u.y);}
-float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*n(p);p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}
+float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=a*n(p);p=p*2.07+vec2(1.7,9.2);a*=.5;}return v;}
+// one soft blob: centre c, radius r, outline wobbling with low-frequency noise around the angle
+float blob(vec2 uv,vec2 c,float r,float seed,float t){
+ vec2 d=uv-c;float l=length(d);vec2 dir=d/max(l,1e-4);
+ float wob=fbm(dir*1.6+vec2(seed,seed*1.7)+t*.22)-.5;
+ float rr=r*(1.+.42*wob);
+ // mostly soft, with a slightly firmer edge so overlaps read as folds
+ return mix(smoothstep(rr,rr*.5,l),smoothstep(rr,rr*.9,l),.4);
+}
 void main(){
  vec2 uv=(gl_FragCoord.xy-.5*uRes)/uRes.y;
- float t=uTime*(.05+.05*uPlay);
- vec2 q=vec2(fbm(uv*1.5+t),fbm(uv*1.5-t+3.1));
- vec2 w=uv+(q-.5)*(.24+uEnergy*.2);
- float m=fbm(w*2.1+vec2(t*1.4,-t));
- float d=length(w)*(.88+.24*m);
- // glowing ring around the title: radius and thickness breathe with the bass, the middle stays dark for the text
- float R=.40+.03*sin(uTime*.7)+uBass*.07+uPulse*.08;
- float W=.10+.07*uEnergy+.05*uPulse;
- float glow=exp(-pow((d-R)/W,2.));
- float halo=exp(-pow((d-R)/(W*2.6),2.))*.16;
- float inner=smoothstep(R,0.,d)*.06;
- float ripple=0.;
- for(int i=0;i<3;i++){float ph=fract(uTime*(.05+.06*uPlay)+float(i)/3.);
-  ripple+=exp(-pow((d-(R+ph*.75))/.012,2.))*(1.-ph)*(1.-ph);}
- vec3 col=mix(uC0,uC1,smoothstep(.25,.8,m));
- col=mix(col,uC2,smoothstep(.35,.95,q.x*m*1.6+.15*sin(uTime*.25)));
- float a=clamp(glow*(.5+.32*uEnergy)+halo+inner+ripple*(.10+.25*uEnergy),0.,1.);
- vec3 c=mix(uBg,col,a);
- c=mix(c,uBg,smoothstep(.55,1.25,length(uv))*.85);
+ float t=uTime;
+ float R=.30*(1.+uBass*.08+uPulse*.12);
+ float sp=.35+.25*uPlay+.5*uEnergy;
+ vec3 c3=uC3,c2=uC2,c1=uC1,c0=uC0;
+ // back to front: magenta fringe, red body, orange, yellow heart
+ vec2 o3=R*.22*vec2(sin(t*.31*sp+1.),cos(t*.27*sp+2.));
+ vec2 o2=R*.26*vec2(sin(t*.43*sp+4.),cos(t*.37*sp+.5));
+ vec2 o1=R*.30*vec2(sin(t*.53*sp+2.5),cos(t*.47*sp+3.3));
+ vec2 o0=R*.34*vec2(sin(t*.61*sp+5.),cos(t*.57*sp+1.2));
+ float b3=blob(uv,o3,R*1.04,1.3,t*sp)*.6;
+ float b2=blob(uv,o2,R*1.0,7.1,t*sp);
+ float b1=blob(uv,o1,R*.95,3.7,t*sp);
+ float b0=blob(uv,o0,R*.78,9.9,t*sp);
+ // internal flow so the colour inside each layer isn't flat
+ float flow=fbm(uv*3.+vec2(t*.12*sp,-t*.09*sp));
+ vec3 col=c3;float a=b3;
+ col=mix(col,mix(c2,c3,flow*.35),b2*.92);a=max(a,b2);
+ col=mix(col,mix(c1,c2,flow*.45),b1*.9);a=max(a,b1);
+ col=mix(col,mix(c0,c1,flow*.30),b0*.88);a=max(a,b0);
+ float l=length(uv);vec2 dir=uv/max(l,1e-4);
+ // bloom: a wide soft halo in the fringe colours
+ float bloom=exp(-pow(max(l-R*.6,0.)/(R*.5),2.))*(.22+.2*uEnergy);
+ // rays: sparse angular spikes with their own lengths, thinning with distance
+ float ang=n(dir*13.+vec2(t*.05,-t*.04));
+ float len=R*(.3+.5*n(dir*4.+11.+t*.03))*(1.+uBass*.7+uPulse*.5);
+ float k=clamp((l-R*.7)/len,0.,1.);
+ // wider at the base, needle-thin at the tip
+ float spike=pow(smoothstep(mix(.5,.78,k),1.,ang),6.);
+ float along=smoothstep(R*.6,R*.85,l)*(1.-smoothstep(R*.75,R*.8+len,l));
+ float ray=spike*along*(.45+.4*uEnergy);
+ vec3 rayCol=mix(c1,c0,.4);
+ vec3 c=uBg;
+ c=mix(c,mix(c3,c2,.5),clamp(bloom,0.,1.)*(1.-a));
+ c=mix(c,col,a);
+ c=mix(c,rayCol,clamp(ray,0.,1.)*(1.-a*.7));
  gl_FragColor=vec4(c,1.);
 }`;
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const cssBg = () => {
-  const v = getComputedStyle(document.documentElement).getPropertyValue("--vibe-bg").trim() || "#141414";
+  let v = getComputedStyle(document.documentElement).getPropertyValue("--vibe-bg").trim();
+  // the production CSS minifier shortens #ffffff to #fff
+  if (/^#[0-9a-f]{3}$/i.test(v)) v = "#" + [...v.slice(1)].map((c) => c + c).join("");
   return /^#[0-9a-f]{6}$/i.test(v) ? v : "#141414";
 };
 
@@ -96,7 +127,7 @@ function startGl(canvas, getState) {
     const loc = gl.getAttribLocation(prog, "a");
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    u = Object.fromEntries(["uRes", "uTime", "uEnergy", "uBass", "uPulse", "uPlay", "uC0", "uC1", "uC2", "uBg"].map((k) => [k, gl.getUniformLocation(prog, k)]));
+    u = Object.fromEntries(["uRes", "uTime", "uEnergy", "uBass", "uPulse", "uPlay", "uC0", "uC1", "uC2", "uC3", "uBg"].map((k) => [k, gl.getUniformLocation(prog, k)]));
     canvas.width = canvas.height = 0; // forces resize() to set the viewport again
   };
   try {
@@ -164,6 +195,7 @@ function startGl(canvas, getState) {
     gl.uniform3fv(u.uC0, sm.colors[0]);
     gl.uniform3fv(u.uC1, sm.colors[1]);
     gl.uniform3fv(u.uC2, sm.colors[2]);
+    gl.uniform3fv(u.uC3, sm.colors[3]);
     if (now - bgAt > 1000) {
       bg = hex(cssBg());
       bgAt = now;
@@ -259,7 +291,7 @@ export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
     if (!paused) ctrl.current?.kick();
   }, [paused]);
 
-  const style = { "--c0": colors[0], "--c1": colors[1], "--c2": colors[2] };
+  const style = { "--c0": colors[0], "--c1": colors[1], "--c2": colors[2], "--c3": colors[3] || colors[2] };
   if (mode === "full" && !broken)
     return (
       <div class={`vibe-canvas ${active && p.playing.value ? "is-playing" : ""}`} style={style} aria-hidden="true">
