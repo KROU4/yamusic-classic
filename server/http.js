@@ -111,13 +111,22 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
   return {
     key,
     server,
-    listen(port = 0) {
-      return new Promise((resolve) => {
-        server.listen(port, "127.0.0.1", () => {
+    /** port — желаемый порт; если он занят и fallback=true, берётся случайный свободный. */
+    listen(port = 0, { fallback = false } = {}) {
+      return new Promise((resolve, reject) => {
+        const onError = (err) => {
+          if (fallback && port !== 0 && err.code === "EADDRINUSE") {
+            server.listen(0, "127.0.0.1");
+          } else reject(err);
+        };
+        server.on("error", onError);
+        server.once("listening", () => {
+          server.off("error", onError);
           const p = server.address().port;
           allowedHosts = new Set([`127.0.0.1:${p}`, `localhost:${p}`]);
           resolve({ port: p, url: `http://127.0.0.1:${p}/` });
         });
+        server.listen(port, "127.0.0.1");
       });
     },
     allowHost(host) {

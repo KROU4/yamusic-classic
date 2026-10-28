@@ -73,6 +73,16 @@ describe("локальный HTTP-сервер", () => {
       await s2.close();
     }
   });
+  it("занятый желаемый порт — откат на свободный", async () => {
+    const s2 = createServer({ svc, staticDir: null, key });
+    const { port: p2 } = await s2.listen(port, { fallback: true });
+    try {
+      expect(p2).not.toBe(port);
+      expect((await request(p2, "/api/me", { headers: { "x-ymc-key": key } })).status).toBe(200);
+    } finally {
+      await s2.close();
+    }
+  });
   it("неизвестный маршрут — 404", async () => {
     const r = await request(port, "/api/nope", { headers: { "x-ymc-key": key } });
     expect(r.status).toBe(404);

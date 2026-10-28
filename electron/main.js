@@ -60,7 +60,8 @@ async function startBackend() {
   const svc = new Service({ dataDir, log });
   await svc.init().catch((e) => log("init failed", e.message));
   const srv = createServer({ svc, staticDir: path.join(root, "dist"), log });
-  const { url } = await srv.listen(0);
+  // постоянный порт = постоянный origin, иначе localStorage (громкость, тема, очередь) терялся бы при каждом запуске
+  const { url } = await srv.listen(Number(process.env.YMC_PORT || 47819), { fallback: true });
   return { svc, srv, url };
 }
 
