@@ -201,9 +201,27 @@ function applyPrefs(p) {
   updateDiscord();
 }
 
+/** Состояние из renderer приводим к строгой форме: строки обрезаны, ссылки только https, числа — числа. */
+function sanitizeState(s) {
+  const str = (v, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
+  const num = (v) => (Number.isFinite(+v) && +v >= 0 ? +v : 0);
+  if (!s || typeof s !== "object" || !s.id) return { playing: !!s?.playing };
+  return {
+    playing: !!s.playing,
+    id: /^\d+$/.test(String(s.id)) ? String(s.id) : "",
+    title: str(s.title),
+    artist: str(s.artist),
+    album: str(s.album),
+    albumId: /^\d+$/.test(String(s.albumId ?? "")) ? String(s.albumId) : null,
+    cover: typeof s.cover === "string" && s.cover.startsWith("https://") ? str(s.cover, 300) : null,
+    durationSec: num(s.durationSec),
+    positionSec: num(s.positionSec),
+  };
+}
+
 ipcMain.on("ymc:state", (e, state) => {
   if (e.sender !== win?.webContents) return;
-  playerState = state && typeof state === "object" ? state : { playing: false };
+  playerState = sanitizeState(state);
   updateThumbar();
   updateTray();
   updateDiscord();

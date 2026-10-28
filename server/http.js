@@ -58,7 +58,7 @@ export function buildRoutes(svc) {
     ["GET", /^\/api\/prefs$/, () => svc.prefs],
     ["POST", /^\/api\/prefs$/, (q, m, b) => svc.setPrefs(b)],
     ["POST", /^\/api\/history\/clear$/, () => (svc.history.clear(), { ok: true })],
-    ["GET", /^\/api\/stats$/, (q) => svc.stats(Math.min(365, Math.max(1, Number(q.get("days") || 7))), Number(q.get("tz") || 0))],
+    ["GET", /^\/api\/stats$/, (q) => svc.stats(Math.min(365, Math.max(1, Number(q.get("days")) || 7)), Math.max(-840, Math.min(840, Number(q.get("tz")) || 0)))],
     ["POST", /^\/api\/stats\/clear$/, () => (svc.playlog.clear(), { ok: true })],
     ["GET", /^\/api\/my\/playlists$/, () => svc.myPlaylists()],
     ["POST", /^\/api\/my\/playlists$/, (q, m, b) => svc.createPlaylist(b.title, b.tracks || [])],

@@ -27,32 +27,49 @@ export class DiscordPresence {
     this.retryTimer = null;
   }
 
-  async connect(clientId) {
-    if (this.sock && this.clientId === clientId) return;
+  connect(clientId) {
+    if (this.clientId === clientId && (this.sock || this.connecting)) return this.connecting || Promise.resolve();
     this.disconnect();
     this.clientId = clientId;
+    // одно подключение за раз: повторные вызовы во время перебора каналов ждут его же
+    this.connecting = this.tryConnect(clientId).finally(() => {
+      this.connecting = null;
+    });
+    return this.connecting;
+  }
+
+  async tryConnect(clientId) {
     for (let i = 0; i < 10; i++) {
-      const ok = await new Promise((resolve) => {
-        const s = net.createConnection(pipePath(i), () => resolve(s));
-        s.once("error", () => resolve(null));
+      const s = await new Promise((resolve) => {
+        const sock = net.createConnection(pipePath(i), () => resolve(sock));
+        sock.once("error", () => resolve(null));
       });
-      if (!ok) continue;
-      this.sock = ok;
-      this.sock.on("data", (buf) => this.onData(buf));
-      this.sock.on("close", () => this.onClose());
-      this.sock.on("error", () => {});
-      this.sock.write(encode(OP_HANDSHAKE, { v: 1, client_id: clientId }));
+      if (!s) continue;
+      // пока подключались, настройку могли выключить или сменить ID
+      if (this.clientId !== clientId) {
+        s.destroy();
+        return;
+      }
+      this.sock = s;
+      this.buffer = Buffer.alloc(0);
+      s.on("data", (buf) => this.onData(buf));
+      s.on("close", () => s === this.sock && this.onClose());
+      s.on("error", () => {});
+      s.write(encode(OP_HANDSHAKE, { v: 1, client_id: clientId }));
       return;
     }
     // Discord не запущен — попробуем позже
-    this.scheduleRetry();
+    if (this.clientId === clientId) this.scheduleRetry();
   }
 
-  onData(buf) {
+  onData(chunk) {
+    // кадры могут приходить частями — копим буфер и разбираем только целые
+    const buf = Buffer.concat([this.buffer || Buffer.alloc(0), chunk]);
     let offset = 0;
     while (offset + 8 <= buf.length) {
       const op = buf.readInt32LE(offset);
       const len = buf.readInt32LE(offset + 4);
+      if (offset + 8 + len > buf.length) break;
       const body = buf.subarray(offset + 8, offset + 8 + len).toString("utf8");
       offset += 8 + len;
       let msg = null;
@@ -69,6 +86,7 @@ export class DiscordPresence {
         this.log("discord: отказ", msg.data?.message || msg.message || "");
       }
     }
+    this.buffer = buf.subarray(offset);
   }
 
   onClose() {
