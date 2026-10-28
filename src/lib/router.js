@@ -14,6 +14,7 @@ const ROUTES = [
   ["settings", /^\/settings$/],
   ["stats", /^\/stats$/],
   ["podcasts", /^\/podcasts(?:\/category\/(?<category>[\w.-]+))?$/],
+  ["multivibe", /^\/multivibe(?:\/(?<room>[^/]+))?$/],
 ];
 
 function parse() {

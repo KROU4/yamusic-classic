@@ -376,7 +376,7 @@ export function playList(tracks, startIndex = 0, ctx = {}) {
 }
 
 /** Start the wave (My Wave by default). */
-export async function playWave({ stationId = "user:onyourwave", settings, title = "Моя волна" } = {}) {
+export async function playWave({ stationId = "user:onyourwave", settings, title = "Моя волна", extraSeeds } = {}) {
   // loadToken — to cancel a load that's already in progress; we check against user intents, though:
   // auto-advance or a crossfade during the request must not cancel a click on the wave
   ++loadToken;
@@ -390,7 +390,7 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
   };
   loading.value = true;
   try {
-    const r = await api.post("/wave/start", { stationId, settings });
+    const r = await api.post("/wave/start", { stationId, settings, extraSeeds });
     if (gen !== intentGen) return; // while waiting, the user started something else
     if (!r.tracks?.length) {
       loading.value = false;
@@ -410,7 +410,16 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
     const used = raw ? { ...DEFAULT_WAVE_SETTINGS, ...raw } : null;
     batch(() => {
       queue.value = r.tracks;
-      context.value = { type: "wave", title, stationId, settings: used, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
+      // extraSeeds (a shared room's wave) are kept so a resumed wave restarts with all of them;
+      // `from` comes from the server, which shortens prompt-wave ids
+      context.value = {
+        type: "wave",
+        title,
+        stationId,
+        settings: used,
+        from: r.wave?.from || `desktop_win-radio-${stationId.replace(":", "_")}-default`,
+        ...(extraSeeds?.length ? { extraSeeds } : {}),
+      };
       if (isMyWave && used && waveEdits.gen === edits) setWaveSettings(used);
     });
     return load(0);
@@ -460,7 +469,7 @@ export async function next({ auto = false, reason } = {}) {
   const i = index.value;
   if (i < queue.value.length - 1) return load(i + 1);
   // wave restored after a restart (a single track saved): the queue ended — a new wave session, not a track repeat
-  if (context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
+  if (context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title, extraSeeds: context.value.extraSeeds });
   if (context.value?.type === "wave") {
     const gen = queueGen;
     const ig = intentGen;
@@ -505,7 +514,7 @@ export function playAt(i) {
 export function toggle() {
   if (!current.value) return;
   // after an app restart the wave continues as a new session, not as a single saved track
-  if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
+  if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title, extraSeeds: context.value.extraSeeds });
   if (!audio.src || (audio.paused && srcTrack !== current.value)) {
     // the element is empty or played another track (loading is still going, was interrupted or failed) —
     // play the current track again instead of resuming a foreign stream

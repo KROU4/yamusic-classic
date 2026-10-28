@@ -1,4 +1,4 @@
-// Pinned items in the sidebar: playlists, albums, artists and My Wave settings.
+// Pinned items in the sidebar: playlists, albums, artists, My Wave settings and My Wave prompts.
 // Stored locally; order is newest first, like the Yandex Music 2023 sidebar.
 import { signal } from "@preact/signals";
 
@@ -14,6 +14,8 @@ export function pinKey(p) {
     case "artist":
       return `${p.type}:${p.id}`;
     case "wave":
+      // a prompt wave is keyed by its text; settings-wave keys stay as they were (stored pins keep matching)
+      if (typeof p.prompt === "string" && p.prompt) return `wave:q2v:${p.prompt}`;
       return `wave:${["activity", "diversity", "moodEnergy", "language"].map((k) => p.settings?.[k] || "").join(":")}`;
     default:
       return `${p.type}:?`;

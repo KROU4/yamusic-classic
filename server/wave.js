@@ -22,6 +22,26 @@ export function settingsSeeds({ diversity = "default", moodEnergy = "all", langu
   return seeds;
 }
 
+// Prompt waves (q2v:<base64>) and shared rooms (multivibe:...) carry their own meaning: My Wave settings
+// seeds are not mixed in (an activity seed would fight the prompt), and saved settings are not touched
+export const isPureStation = (id) => typeof id === "string" && /^(q2v|multivibe):/.test(id);
+
+/** Extra seeds from the UI (a shared room's wave may have several): strings only, bounded. */
+export function cleanSeeds(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((s) => typeof s === "string" && /^[\w-]+:\S+$/.test(s) && s.length <= 1024).slice(0, 8);
+}
+
+/**
+ * `from` for feedback and play reports. A q2v id holds base64 (+ / =) of a prompt of any length, so
+ * such ids are reported by their type only rather than pasting the prompt into every report.
+ */
+export function stationFrom(stationId) {
+  const id = String(stationId || "user:onyourwave");
+  if (/^[\w-]+:[\w.-]+$/.test(id) && id.length <= 80) return `desktop_win-radio-${id.replace(":", "_")}-default`;
+  return `desktop_win-radio-${id.split(":")[0].replace(/[^\w-]/g, "") || "station"}-default`;
+}
+
 const MAX_FETCH_ROUNDS = 6;
 const TARGET_BUFFER = 6;
 
@@ -47,6 +67,10 @@ export class WaveManager {
     const r = await api.sessionNew({ seeds, queue, allowExplicit: this.prefs.allowExplicit, aiReduced: this.prefs.aiReduced });
     // while waiting for the response, the user started another station: this launch is stale
     if (gen !== this.startGen) throw new ApiError("Запуск станции отменён более новым", 409);
+    // rotor answers a seed it couldn't use with a generic wave; for a prompt that would play unrelated music
+    if (stationId.startsWith("q2v:") && Array.isArray(r.acceptedSeeds) && !r.acceptedSeeds.some((x) => x?.type === "q2v")) {
+      throw new ApiError("Не получилось подобрать музыку по такому запросу. Попробуйте описать иначе", 422);
+    }
     const session = (this.session = {
       id: r.radioSessionId,
       batchId: r.batchId,
@@ -129,7 +153,7 @@ export class WaveManager {
   async feedback(type, track, totalPlayedSeconds) {
     const s = this.session;
     if (!s) return;
-    const event = { type, timestamp: new Date().toISOString(), from: `desktop_win-radio-${s.stationId.replace(":", "_")}-default` };
+    const event = { type, timestamp: new Date().toISOString(), from: stationFrom(s.stationId) };
     if (track) event.trackId = track.albumId ? `${track.id}:${track.albumId}` : track.id;
     if (totalPlayedSeconds != null) event.totalPlayedSeconds = Math.round(totalPlayedSeconds);
     await this.deps.api.sessionFeedback(s.id, s.batchId, event);
@@ -138,7 +162,7 @@ export class WaveManager {
   info() {
     const s = this.session;
     return s
-      ? { active: true, stationId: s.stationId, settings: s.settings, buffered: s.buffer.length, description: s.description, stats: this.stats }
+      ? { active: true, stationId: s.stationId, settings: s.settings, buffered: s.buffer.length, description: s.description, from: stationFrom(s.stationId), stats: this.stats }
       : { active: false, stats: this.stats };
   }
 }

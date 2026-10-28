@@ -8,7 +8,8 @@ import { resolveSession } from "./token.js";
 import { JsonStore, PlayHistory } from "./store.js";
 import { normTrack, normAlbum, normArtist, normPlaylist, normStation, coverUrl } from "./normalize.js";
 import { DEFAULT_CURATION, songKey } from "./curate.js";
-import { WaveManager, WAVE_SETTINGS } from "./wave.js";
+import { WaveManager, WAVE_SETTINGS, isPureStation, cleanSeeds } from "./wave.js";
+import { WaveRooms } from "./rooms.js";
 import { Uncensor } from "./uncensor.js";
 import { getLyrics } from "./lyrics.js";
 import { translateLines } from "./lyrics-translate.js";
@@ -64,6 +65,8 @@ export class Service {
       getPrefs: () => this.prefs,
       log,
     });
+    // "My Wave for two" rooms (wave/rooms)
+    this.rooms = new WaveRooms({ api: this.api, requireAuth: () => this.requireAuth() });
     this.cache = new Map();
     this.playlistLocks = new Map(); // kind -> tail of this playlist's edit chain
     this.podcasts = new Podcasts(this);
@@ -457,11 +460,11 @@ export class Service {
   }
 
   // ---------- wave ----------
-  async waveStart({ stationId, settings }) {
+  async waveStart({ stationId, settings, extraSeeds }) {
     this.requireAuth();
-    const s = settings || this.prefs.wave;
+    const s = isPureStation(stationId) ? {} : settings || this.prefs.wave;
     if (!stationId || stationId === "user:onyourwave") this.setPrefs({ wave: s });
-    const info = await this.wave.start({ stationId: stationId || "user:onyourwave", settings: s });
+    const info = await this.wave.start({ stationId: stationId || "user:onyourwave", settings: s, extraSeeds: cleanSeeds(extraSeeds) });
     // another station may have started while this one was launching: don't hand its buffer to this request
     const session = this.wave.session;
     const stale = () => this.wave.session !== session || session?.id !== info.sessionId;

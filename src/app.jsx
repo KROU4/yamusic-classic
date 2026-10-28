@@ -19,6 +19,7 @@ import { SettingsPage } from "./pages/Settings.jsx";
 import { StatsPage } from "./pages/Stats.jsx";
 import { PodcastsPage } from "./pages/Podcasts.jsx";
 import "./player/podcast.js"; // episode progress sync runs for the whole session
+import { MultivibePage } from "./pages/Multivibe.jsx";
 import { Loading } from "./components/States.jsx";
 import * as player from "./player/engine.js";
 import { loadOverrides } from "./lib/overrides.js";
@@ -44,6 +45,8 @@ function Page({ me, reconnect }) {
       return <RadioPage />;
     case "stats":
       return <StatsPage />;
+    case "multivibe":
+      return <MultivibePage room={params.room} />;
     case "settings":
       return <SettingsPage me={me} onReconnect={reconnect} />;
     case "podcasts":

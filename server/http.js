@@ -77,6 +77,12 @@ export function buildRoutes(svc) {
     ["POST", /^\/api\/overrides$/, (q, m, b) => svc.setOverride(String(b.trackId), b.path)],
     ["POST", /^\/api\/overrides\/remove$/, (q, m, b) => svc.removeOverride(String(b.trackId))],
     ...podcastRoutes(svc),
+    // My Wave for two: room ids ride in bodies so they never reach the request log
+    ["GET", /^\/api\/rooms$/, () => svc.rooms.list()],
+    ["POST", /^\/api\/rooms\/create$/, () => svc.rooms.create()],
+    ["POST", /^\/api\/rooms\/get$/, (q, m, b) => svc.rooms.get(b.ref)],
+    ["POST", /^\/api\/rooms\/enter$/, (q, m, b) => svc.rooms.enter(b.ref)],
+    ["POST", /^\/api\/rooms\/exit$/, (q, m, b) => svc.rooms.exit(b.ref)],
   ];
 }
 
