@@ -383,6 +383,24 @@ h3 {
   line-height: 1.45;
   color: var(--text-3);
 }
+.sb-update {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 10px 0;
+  height: 38px;
+  border-radius: 19px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sb-update:hover {
+  background: var(--accent-hover);
+}
 .sb-foot {
   height: var(--player-h);
   display: flex;

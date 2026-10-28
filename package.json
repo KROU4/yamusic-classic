@@ -51,10 +51,18 @@
     },
     "portable": {
       "artifactName": "YM-Classic-${version}-portable.exe"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "KROU4",
+        "repo": "yamusic-classic"
+      }
+    ]
   },
   "dependencies": {
-    "@preact/signals": "^2.11.4"
+    "@preact/signals": "^2.11.4",
+    "electron-updater": "^6.8.11"
   },
   "allowScripts": {
     "electron@45.1.0": true,

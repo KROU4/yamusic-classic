@@ -7,6 +7,7 @@ import { isDesktop, zoom, setZoom, ZOOM_STEPS } from "../lib/desktop.js";
 import { vibeMode, shortcutsOpen } from "../lib/ui.js";
 import { Loading } from "../components/States.jsx";
 import { EqPanel } from "../components/Equalizer.jsx";
+import { canUpdate, update, updateLabel, updateReady, checkUpdate, installUpdate } from "../lib/updates.js";
 import * as player from "../player/engine.js";
 
 function Toggle({ label, hint, checked, onChange }) {
@@ -278,6 +279,33 @@ export function SettingsPage({ me, onReconnect }) {
           </button>
         </div>
       </section>
+
+      {canUpdate && (
+        <section class="settings-group">
+          <h2>Обновления</h2>
+          <Toggle
+            label="Обновляться автоматически"
+            hint={update.value?.portable ? "Портативная версия не может обновить себя сама: при новой версии появится ссылка на скачивание" : "Новая версия скачивается в фоне и устанавливается при перезапуске"}
+            checked={prefs.autoUpdate !== false}
+            onChange={(v) => save({ autoUpdate: v })}
+          />
+          <div class="setting">
+            <span class="setting-text">
+              <span class="setting-label">{updateLabel(update.value) || "Версия"}</span>
+              {update.value?.status === "error" && <span class="setting-hint">{update.value.error}</span>}
+            </span>
+            {updateReady() ? (
+              <button class="btn primary" onClick={installUpdate}>
+                {update.value.status === "ready" ? "Перезапустить и обновить" : "Скачать"}
+              </button>
+            ) : (
+              <button class="btn ghost" onClick={checkUpdate} disabled={update.value?.status === "checking" || update.value?.status === "downloading"}>
+                Проверить
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <section class="settings-group">
         <h2>Аккаунт</h2>

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { Service } from "../server/service.js";
 import { createServer } from "../server/http.js";
 import { renderPng, SHAPES } from "./png.js";
+import { createUpdater } from "./updater.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const t0 = Date.now();
@@ -38,6 +39,7 @@ let win = null;
 let tray = null;
 let backend = null;
 let quitting = false;
+let updater = null;
 let miniMode = false;
 let pendingMaximize = false; // the window started in the tray, and it must be maximized on first show
 let normalBounds = null; // window size before switching to the mini player
@@ -201,6 +203,7 @@ function applyPrefs(p) {
   // the portable build unpacks to a temp folder: write the portable exe itself to autostart
   // (same path/args on disable too, otherwise Windows won't find and remove the right entry)
   if (SMOKE) return; // a test run must not touch the user's autostart entry or grab global hotkeys
+  updater?.schedule(p.autoUpdate !== false);
   if (app.isPackaged) {
     const exe = process.env.PORTABLE_EXECUTABLE_FILE;
     app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"], ...(exe ? { path: exe } : {}) });
@@ -236,6 +239,16 @@ ipcMain.on("ymc:state", (e, state) => {
 ipcMain.on("ymc:mini", (e, on) => {
   if (e.sender !== win?.webContents) return;
   setMini(!!on);
+});
+
+// updates: current state on request, manual check, install (restarts the app)
+ipcMain.handle("ymc:update-state", (e) => (e.sender === win?.webContents ? updater?.state || null : null));
+ipcMain.on("ymc:update-check", (e) => e.sender === win?.webContents && updater?.check());
+ipcMain.on("ymc:update-install", (e) => {
+  if (e.sender !== win?.webContents || !updater) return;
+  // closing to the tray must not swallow the restart
+  if (updater.state.status === "ready") quitting = true;
+  updater.install();
 });
 
 // native file picker for "play my own file instead of this track"
@@ -408,6 +421,7 @@ app.whenReady().then(async () => {
     log(`backend ready ${Date.now() - t0} ms after start`);
     createWindow(backend.url, backend.srv.key);
     if (!SMOKE) createTray();
+    updater = createUpdater({ send: (st) => win && !win.isDestroyed() && win.webContents.send("ymc:update", st), log, enabled: !SMOKE });
     applyPrefs(prefs());
     backend.svc.onPrefs((next) => applyPrefs(next));
   } catch (e) {

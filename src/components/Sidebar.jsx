@@ -5,6 +5,7 @@ import { paletteFor } from "./VibeCanvas.jsx";
 import { route, href, go } from "../lib/router.js";
 import { pins, unpin, movePin, pinKey } from "../lib/pins.js";
 import { sidebarCollapsed } from "../lib/ui.js";
+import { update, updateReady, updateLabel, installUpdate } from "../lib/updates.js";
 import * as p from "../player/engine.js";
 
 const NAV = [
@@ -138,6 +139,12 @@ export function Sidebar({ me }) {
         )}
       </div>
 
+      {updateReady() && (
+        <button class="sb-update" onClick={installUpdate} title={updateLabel(update.value)}>
+          <Icon name="sparkle" size={18} />
+          {!collapsed && <span>{update.value.status === "ready" ? `Обновить до ${update.value.version}` : `Доступна ${update.value.version}`}</span>}
+        </button>
+      )}
       <div class="sb-foot">
         <a class={`sb-user ${name === "settings" ? "on" : ""}`} href={href("/settings")} title="Настройки">
           <span class={`avatar ${me?.hasPlus ? "plus" : ""}`}>

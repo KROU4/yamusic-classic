@@ -66,7 +66,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ steps.ver.outputs.tag }}"
-          files=(release/*.exe release/SHA256SUMS.txt)
+          # latest.yml + blockmap let installed copies update themselves (electron-updater)
+          files=(release/*.exe release/*.blockmap release/latest.yml release/SHA256SUMS.txt)
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${files[@]}" --clobber
           else
@@ -79,5 +80,7 @@ jobs:
           name: ym-classic-${{ steps.ver.outputs.version }}
           path: |
             release/*.exe
+            release/*.blockmap
+            release/latest.yml
             release/SHA256SUMS.txt
           if-no-files-found: error

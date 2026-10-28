@@ -16,3 +16,15 @@ describe("taskbar icons", () => {
     expect(alphas).toContain(255);
   });
 });
+
+import { newerVersion } from "../electron/version.js";
+
+describe("update version check", () => {
+  it("compares release tags numerically", () => {
+    expect(newerVersion("v0.3.0", "0.2.0")).toBe(true);
+    expect(newerVersion("v0.2.10", "0.2.9")).toBe(true);
+    expect(newerVersion("v0.2.0", "0.2.0")).toBe(false);
+    expect(newerVersion("v0.1.9", "0.2.0")).toBe(false);
+    expect(newerVersion("v1.0.0-rc.1", "0.9.9")).toBe(true);
+  });
+});

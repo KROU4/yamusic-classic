@@ -30,6 +30,7 @@ export const DEFAULT_PREFS = {
   autostart: false,
   startMinimized: false,
   globalHotkeys: false,
+  autoUpdate: true, // check GitHub Releases; the installed build updates itself on restart
 };
 
 /** Yandex ID avatar; "0/0-0" (or empty) is the grey placeholder — the UI shows the initial instead. */
