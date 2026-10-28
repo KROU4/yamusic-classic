@@ -4,8 +4,9 @@ import "./lib/theme.js";
 import { isDesktop, stepZoom, mini } from "./lib/desktop.js";
 import "./styles/app.css";
 import { App } from "./app.jsx";
-import { shortcutsOpen } from "./lib/ui.js";
+import { shortcutsOpen, seekStep, volumeStep } from "./lib/ui.js";
 import * as player from "./player/engine.js";
+import "./lib/notify.js";
 
 // Zoom: Ctrl+plus/minus/0 (in the app; in the browser the browser handles it itself)
 window.addEventListener("keydown", (e) => {
@@ -51,19 +52,19 @@ window.addEventListener("keydown", (e) => {
       break;
     case "ArrowRight":
       e.preventDefault();
-      e.shiftKey ? player.next() : player.seek(pos + 10);
+      e.shiftKey ? player.next() : player.seek(pos + seekStep.peek());
       break;
     case "ArrowLeft":
       e.preventDefault();
-      e.shiftKey ? player.prev() : player.seek(pos - 10);
+      e.shiftKey ? player.prev() : player.seek(pos - seekStep.peek());
       break;
     case "ArrowUp":
       e.preventDefault();
-      player.setVolume(player.volume.value + 0.05);
+      player.setVolume(player.volume.value + volumeStep.peek() / 100);
       break;
     case "ArrowDown":
       e.preventDefault();
-      player.setVolume(player.volume.value - 0.05);
+      player.setVolume(player.volume.value - volumeStep.peek() / 100);
       break;
     case "KeyL":
       if (player.current.value) player.like(player.current.value);

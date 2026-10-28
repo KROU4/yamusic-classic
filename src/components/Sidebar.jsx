@@ -1,6 +1,7 @@
 // Sidebar in the spirit of Yandex Music 2023–2024: sections, «Мне нравится» and pinned items.
 import { useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
+import { Logo } from "./Logo.jsx";
 import { paletteFor } from "./VibeCanvas.jsx";
 import { route, href, go } from "../lib/router.js";
 import { pins, unpin, movePin, pinKey } from "../lib/pins.js";
@@ -95,11 +96,11 @@ export function Sidebar({ me }) {
     <aside class={`sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Боковое меню">
       <div class="sb-head">
         <a class="logo" href={href("/")} aria-label="Главная">
-          <span class="logo-mark">
-            <Icon name="play" size={14} />
-          </span>
+          <Logo size={30} />
           {!collapsed && (
-            <span class="logo-text">Музыка</span>
+            <span class="logo-text">
+              <b>YM</b> Classic
+            </span>
           )}
         </a>
         <button class="icon-btn sb-collapse" onClick={() => (sidebarCollapsed.value = !collapsed)} aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"} title={collapsed ? "Развернуть меню" : "Свернуть меню"}>
@@ -153,8 +154,22 @@ export function Sidebar({ me }) {
           {!collapsed && <span>{update.value.status === "ready" ? `Обновить до ${update.value.version}` : `Доступна ${update.value.version}`}</span>}
         </button>
       )}
+      <nav class="sb-nav sb-nav-foot" aria-label="Приложение">
+        <a href={href("/settings")} class={name === "settings" ? "on" : ""} aria-current={name === "settings" ? "page" : undefined} title="Настройки" aria-label="Настройки">
+          <Icon name="settings" size={22} />
+          {!collapsed && <span>Настройки</span>}
+        </a>
+      </nav>
       <div class="sb-foot">
-        <a class={`sb-user ${name === "settings" ? "on" : ""}`} href={href("/settings")} title="Настройки">
+        {/* the profile is the Yandex ID account: it opens in the browser (external links leave the app) */}
+        <a
+          class="sb-user"
+          href="https://id.yandex.ru/"
+          target="_blank"
+          rel="noreferrer"
+          title="Аккаунт Яндекс ID — откроется в браузере"
+          aria-label={`${me?.name || "Профиль"}: аккаунт Яндекс ID, откроется в браузере`}
+        >
           <span class={`avatar ${me?.hasPlus ? "plus" : ""}`}>
             {me?.avatar && !avatarFailed ? (
               <img src={me.avatar} alt="" onError={() => setAvatarFailed(true)} referrerpolicy="no-referrer" />
@@ -166,10 +181,10 @@ export function Sidebar({ me }) {
           {!collapsed && (
             <span class="pin-text">
               <span class="pin-title">{me?.name || "Профиль"}</span>
-              <span class="pin-sub">{me?.hasPlus ? "Плюс" : "Настройки"}</span>
+              <span class="pin-sub">{me?.hasPlus ? "Плюс · Яндекс ID" : "Яндекс ID"}</span>
             </span>
           )}
-          {!collapsed && <Icon name="settings" size={18} />}
+          {!collapsed && <Icon name="link" size={16} />}
         </a>
       </div>
     </aside>

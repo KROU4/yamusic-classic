@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("ymcDesktop", {
   installUpdate: () => ipcRenderer.send("ymc:update-install"),
   /** Native dialog to choose an audio file; resolves to its path or null. */
   pickAudioFile: () => ipcRenderer.invoke("ymc:pick-audio"),
+  /** Bring the main window to the front (a click on the track notification). */
+  focus: () => ipcRenderer.send("ymc:focus"),
   /** Window visibility (minimized / in the tray) — to pause purely visual work. */
   onVisibility: (cb) => ipcRenderer.on("ymc:visibility", (_e, visible) => cb(!!visible)),
 });

@@ -6,6 +6,7 @@ import { artistNames } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
 import * as graph from "./audiograph.js";
 import { setWaveSettings, waveEdits, DEFAULT_WAVE_SETTINGS } from "./waveState.js";
+import { seekStep, volumeStep } from "../lib/ui.js";
 
 const LS = {
   get(key, fallback) {
@@ -851,8 +852,8 @@ if ("mediaSession" in navigator) {
   ms.setActionHandler("nexttrack", () => next());
   ms.setActionHandler("previoustrack", () => prev());
   ms.setActionHandler("seekto", (e) => seek(e.seekTime));
-  ms.setActionHandler("seekbackward", () => seek(audio.currentTime - 10));
-  ms.setActionHandler("seekforward", () => seek(audio.currentTime + 10));
+  ms.setActionHandler("seekbackward", () => seek(audio.currentTime - seekStep.peek()));
+  ms.setActionHandler("seekforward", () => seek(audio.currentTime + seekStep.peek()));
 }
 
 // control from the shell: global hotkeys, taskbar buttons, tray
@@ -861,8 +862,8 @@ window.__ymcControl = {
   next: () => next(),
   prev,
   like: () => current.value && like(current.value),
-  volumeUp: () => setVolume(volume.value + 0.05),
-  volumeDown: () => setVolume(volume.value - 0.05),
+  volumeUp: () => setVolume(volume.value + volumeStep.peek() / 100),
+  volumeDown: () => setVolume(volume.value - volumeStep.peek() / 100),
 };
 
 // window closed mid-track: the listen still makes it into history and the report to Yandex

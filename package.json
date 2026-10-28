@@ -35,6 +35,8 @@
       "server/**",
       "dist/**",
       "build/icon.png",
+      "build/tray.png",
+      "build/tray@2x.png",
       "package.json"
     ],
     "win": {

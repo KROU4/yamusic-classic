@@ -70,6 +70,54 @@
   color-scheme: light;
 }
 
+/* accents from the settings: black text on every swatch stays above 7:1; the light theme gets a darker
+   shade for accent-coloured text, the bright one is unreadable on white */
+:root[data-accent="orange"] {
+  --accent: #ff8a3d;
+  --accent-hover: #ffa366;
+}
+:root[data-accent="pink"] {
+  --accent: #ff6fae;
+  --accent-hover: #ff8fc0;
+}
+:root[data-accent="violet"] {
+  --accent: #b69cff;
+  --accent-hover: #c8b3ff;
+}
+:root[data-accent="sky"] {
+  --accent: #5cb8ff;
+  --accent-hover: #80c8ff;
+}
+:root[data-accent="mint"] {
+  --accent: #3ddc97;
+  --accent-hover: #66e4ad;
+}
+:root[data-theme="light"][data-accent="orange"] {
+  --accent-text: #a84a00;
+}
+:root[data-theme="light"][data-accent="pink"] {
+  --accent-text: #b3236a;
+}
+:root[data-theme="light"][data-accent="violet"] {
+  --accent-text: #6a43d6;
+}
+:root[data-theme="light"][data-accent="sky"] {
+  --accent-text: #0b62b0;
+}
+:root[data-theme="light"][data-accent="mint"] {
+  --accent-text: #0f7a4f;
+}
+
+/* «Меньше анимаций» in the settings: the same as the system's reduced motion (the wave has its own setting) */
+:root[data-motion="calm"] :not(.vibe-lite > i),
+:root[data-motion="calm"] *::before,
+:root[data-motion="calm"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -234,23 +282,14 @@ h3 {
   white-space: nowrap;
 }
 .logo-mark {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
-  display: grid;
-  place-items: center;
+  display: block;
   flex-shrink: 0;
 }
-.logo-mark .icon {
-  margin-left: 2px;
-}
 .logo-mark.big {
-  width: 72px;
-  height: 72px;
-  font-size: 28px;
   margin: 0 auto 20px;
+}
+.logo-text b {
+  font-weight: 800;
 }
 .logo-text small {
   font-size: 11px;
@@ -296,6 +335,10 @@ h3 {
 .sidebar.is-collapsed .sb-nav a {
   justify-content: center;
   padding: 0;
+}
+/* «Настройки» right above the profile */
+.sb-nav-foot {
+  padding-top: 6px;
 }
 .sb-sep {
   height: 1px;
@@ -781,7 +824,8 @@ h3 {
 }
 /* the official orb loop: a square video centred on the block; its square edges dissolve into the panel,
    the hue follows the mood, scale and glow follow the music (set per frame from VibeCanvas) */
-.vibe-official video {
+.vibe-official video,
+.vibe-official canvas {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -794,6 +838,10 @@ h3 {
   -webkit-mask-image: radial-gradient(closest-side, #000 58%, transparent 98%);
   mask-image: radial-gradient(closest-side, #000 58%, transparent 98%);
   will-change: transform, filter;
+}
+/* smooth mode: the canvas shows blended frames, the video only feeds it */
+.vibe-official.is-blend video {
+  opacity: 0;
 }
 /* light mode: three blurred palette blobs drift slowly; static — the same blobs without motion */
 .vibe-lite {
@@ -1540,6 +1588,21 @@ h3 {
 }
 .player-time.end {
   text-align: left;
+}
+button.player-time {
+  min-width: 4.5ch;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+button.player-time:hover {
+  color: var(--text);
+  background: var(--bg-hover);
 }
 .player-extra {
   display: flex;

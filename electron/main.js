@@ -75,8 +75,8 @@ function saveBounds() {
   }
 }
 
-function appIcon() {
-  const file = path.join(root, "build", "icon.png");
+function appIcon(name = "icon.png") {
+  const file = path.join(root, "build", name);
   return fs.existsSync(file) ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
 }
 
@@ -145,9 +145,12 @@ function updateTray() {
 }
 
 function createTray() {
-  const icon = appIcon();
+  // the tray gets its own drawing without the grooves (they turn into noise at 16 px)
+  // (tray.png is 16 px, Electron adds tray@2x.png for scaled screens itself)
+  let icon = appIcon("tray.png");
+  if (icon.isEmpty()) icon = appIcon().resize({ width: 16, height: 16, quality: "best" });
   if (icon.isEmpty()) return;
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray = new Tray(icon);
   updateTray();
   // by visibility, not focus: clicking the tray in Windows takes focus from the window itself
   tray.on("click", () => (win?.isVisible() && !win.isMinimized() ? win.hide() : showWindow()));
@@ -241,6 +244,8 @@ ipcMain.on("ymc:mini", (e, on) => {
   if (e.sender !== win?.webContents) return;
   setMini(!!on);
 });
+
+ipcMain.on("ymc:focus", (e) => e.sender === win?.webContents && showWindow());
 
 // updates: current state on request, manual check, install (restarts the app)
 ipcMain.handle("ymc:update-state", (e) => (e.sender === win?.webContents ? updater?.state || null : null));

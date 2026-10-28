@@ -6,7 +6,7 @@ import { Icon } from "./Icon.jsx";
 import { ExplicitBadge, Artists } from "./TrackList.jsx";
 import { seconds } from "../lib/format.js";
 import { href } from "../lib/router.js";
-import { nowPlayingOpen } from "../lib/ui.js";
+import { nowPlayingOpen, playerTint, seekStep, volumeStep, timeLeft } from "../lib/ui.js";
 import { isDesktop, setMini } from "../lib/desktop.js";
 import { EqPanel } from "./Equalizer.jsx";
 import { eq, webAudioSupported as webAudio } from "../player/audiograph.js";
@@ -64,9 +64,10 @@ export function Progress() {
       aria-valuenow={Math.round(pos)}
       aria-valuetext={`${seconds(pos)} из ${seconds(dur)}`}
       onKeyDown={(e) => {
-        const to = { ArrowLeft: pos - 5, ArrowRight: pos + 5, PageDown: pos - 30, PageUp: pos + 30, Home: 0, End: dur - 1 }[e.key];
+        const step = seekStep.peek();
+        const to = { ArrowLeft: pos - step, ArrowRight: pos + step, PageDown: pos - 30, PageUp: pos + 30, Home: 0, End: dur - 1 }[e.key];
         if (to == null || !dur) return;
-        // the slider owns the arrows while focused (the global hotkeys would seek by 10 s on top)
+        // the slider owns the arrows while focused (the page hotkeys would seek a second time on top)
         e.preventDefault();
         e.stopPropagation();
         p.seek(Math.max(0, Math.min(dur - 0.5, to)));
@@ -110,7 +111,7 @@ export function Volume() {
         onPointerUp={onEnd}
         onPointerCancel={onEnd}
         onLostPointerCapture={onEnd}
-        onWheel={(e) => p.setVolume(p.volume.value + (e.deltaY < 0 ? 0.05 : -0.05))}
+        onWheel={(e) => p.setVolume(p.volume.value + ((e.deltaY < 0 ? 1 : -1) * volumeStep.peek()) / 100)}
         role="slider"
         tabIndex={0}
         aria-label="Громкость"
@@ -119,7 +120,8 @@ export function Volume() {
         aria-valuenow={Math.round(v * 100)}
         aria-valuetext={`${Math.round(v * 100)}%`}
         onKeyDown={(e) => {
-          const to = { ArrowLeft: v - 0.05, ArrowDown: v - 0.05, ArrowRight: v + 0.05, ArrowUp: v + 0.05, Home: 0, End: 1 }[e.key];
+          const step = volumeStep.peek() / 100;
+          const to = { ArrowLeft: v - step, ArrowDown: v - step, ArrowRight: v + step, ArrowUp: v + step, Home: 0, End: 1 }[e.key];
           if (to == null) return;
           e.preventDefault();
           e.stopPropagation();
@@ -359,7 +361,7 @@ export function PlayerBar() {
   return (
     <footer
       class={`player ${t ? "" : "is-empty"}`}
-      style={t?.color && /^#[0-9a-f]{6}$/i.test(t.color) ? { "--player-tint": `color-mix(in srgb, ${t.color} 14%, var(--player-bg))` } : undefined}
+      style={playerTint.value && t?.color && /^#[0-9a-f]{6}$/i.test(t.color) ? { "--player-tint": `color-mix(in srgb, ${t.color} 14%, var(--player-bg))` } : undefined}
     >
       <div class="player-track">
         {t ? (
@@ -420,7 +422,18 @@ export function PlayerBar() {
         <div class="player-progress">
           <span class="player-time">{t ? seconds(p.position.value) : ""}</span>
           <Progress />
-          <span class="player-time end">{t ? seconds(p.duration.value) : ""}</span>
+          {t ? (
+            <button
+              class="player-time end"
+              onClick={() => (timeLeft.value = !timeLeft.value)}
+              title={timeLeft.value ? "Показать длительность" : "Показать, сколько осталось"}
+              aria-label={timeLeft.value ? `Осталось ${seconds(Math.max(0, p.duration.value - p.position.value))}. Показать длительность` : `Длительность ${seconds(p.duration.value)}. Показать, сколько осталось`}
+            >
+              {timeLeft.value ? `−${seconds(Math.max(0, p.duration.value - p.position.value))}` : seconds(p.duration.value)}
+            </button>
+          ) : (
+            <span class="player-time end" />
+          )}
         </div>
       </div>
 

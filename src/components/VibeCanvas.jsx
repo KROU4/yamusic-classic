@@ -3,7 +3,7 @@
 // Custom WebGL shader; reacts to music via the audio graph analyzer, colors follow the wave's mood.
 // Modes: full (shader), lite (light CSS animation), off (static gradient). Without WebGL — lite.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { vibeMode } from "../lib/ui.js";
+import { vibeMode, vibeFps, vibeReact } from "../lib/ui.js";
 import { windowVisible } from "../lib/desktop.js";
 import { theme } from "../lib/theme.js";
 import { api } from "../lib/api.js";
@@ -32,6 +32,21 @@ export function paletteFor(settings) {
   if (s.moodEnergy && s.moodEnergy !== "all" && PALETTES[s.moodEnergy]) return PALETTES[s.moodEnergy];
   if (s.activity && s.activity !== "any" && PALETTES[s.activity]) return PALETTES[s.activity];
   return PALETTES.default;
+}
+
+/** The frame-rate cap from the settings, one per render loop: skip(now) is true when this frame should be skipped. */
+function makePacer() {
+  let due = 0;
+  return (now) => {
+    const cap = vibeFps.peek();
+    if (!(cap > 0)) return false;
+    const step = 1000 / cap;
+    if (now < due - 1) return true; // 1 ms of slack for timer jitter
+    // the next slot follows the schedule, not this frame, so uneven screen rates still average out to the cap;
+    // after a stall (hidden, paused) the schedule restarts from now
+    due = now - due > step ? now + step : due + step;
+    return false;
+  };
 }
 
 const VERT = `attribute vec2 a;void main(){gl_Position=vec4(a,0.,1.);}`;
@@ -143,6 +158,7 @@ function startGl(canvas, getState) {
   let visible = true;
   let lost = false;
   let last = performance.now();
+  const skip = makePacer();
   let time = Math.random() * 100;
   const sm = { energy: 0, bass: 0, pulse: 0, play: 0, colors: null };
   // re-read the theme background once a second: the "follow system" theme changes without re-rendering the component
@@ -168,10 +184,14 @@ function startGl(canvas, getState) {
   const frame = (now) => {
     raf = 0;
     if (!canRun()) return;
+    if (skip(now)) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     const st = getState();
-    const lv = st.playing ? graph.levels() : null;
+    const lv = st.playing && vibeReact.peek() ? graph.levels() : null;
     // without an analyzer (browser, paused) — a calm "breathing", slightly livelier while playing
     const target = lv || { energy: st.playing ? 0.35 + 0.1 * Math.sin(now / 900) : 0.12, bass: st.playing ? 0.15 + 0.08 * Math.sin(now / 430) : 0.04 };
     const k = 1 - Math.exp(-dt * 7);
@@ -278,7 +298,7 @@ const hueFor = (colors) => HUE[Object.keys(PALETTES).find((k) => PALETTES[k] ===
 
 let assetsP = null;
 /** Official loop links from the backend; null when the official app isn't installed (then the own shader runs). */
-function officialAssets() {
+export function officialAssets() {
   assetsP ||= api
     .get("/vibe/assets")
     .then((a) => (a?.available ? a : null))
@@ -286,13 +306,103 @@ function officialAssets() {
   return assetsP;
 }
 
+// In-between frames for the 25 fps loop: the last two decoded frames are cross-faded on every screen
+// refresh, so the orb moves at 60 fps (or the screen's rate) instead of stepping. The orb is soft and
+// blurry, so a linear blend reads as motion; the cost is one frame (40 ms) of delay, which nobody sees here.
+const BLEND_VERT = `attribute vec2 a;varying vec2 uv;void main(){uv=vec2(a.x*.5+.5,.5-a.y*.5);gl_Position=vec4(a,0.,1.);}`;
+const BLEND_FRAG = `precision mediump float;uniform sampler2D f0;uniform sampler2D f1;uniform float t;varying vec2 uv;
+void main(){gl_FragColor=mix(texture2D(f0,uv),texture2D(f1,uv),t);}`;
+
+/** Returns { draw(now), stop() } or null when WebGL or requestVideoFrameCallback is missing (the video shows as is). */
+function startBlend(canvas, video, onFirstFrame) {
+  if (!("requestVideoFrameCallback" in video)) return null;
+  const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: false });
+  if (!gl) return null;
+  const sh = (type, src) => {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || "shader");
+    return s;
+  };
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, BLEND_VERT));
+  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, BLEND_FRAG));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error("link");
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const a = gl.getAttribLocation(prog, "a");
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+  const tex = () => {
+    const t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    // the loop is 1000×1000 (not a power of two): no mipmaps, clamped edges
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  };
+  let prev = tex();
+  let cur = tex();
+  gl.uniform1i(gl.getUniformLocation(prog, "f0"), 0);
+  gl.uniform1i(gl.getUniformLocation(prog, "f1"), 1);
+  const uT = gl.getUniformLocation(prog, "t");
+  let frames = 0; // decoded frames so far (0, 1, 2+)
+  let at = 0; // when the newest frame arrived
+  let gap = 40; // smoothed interval between frames, ms (25 fps at 1×; longer when the loop slows down)
+  let id = 0;
+  const onFrame = (now) => {
+    [prev, cur] = [cur, prev];
+    gl.bindTexture(gl.TEXTURE_2D, cur);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
+    if (!frames) onFirstFrame();
+    if (frames < 2) frames++;
+    const d = now - at;
+    if (at && d > 8 && d < 250) gap += (d - gap) * 0.3;
+    at = now;
+    id = video.requestVideoFrameCallback(onFrame);
+  };
+  id = video.requestVideoFrameCallback(onFrame);
+  return {
+    draw(now) {
+      if (!frames) return;
+      // the loop is 1000 px: no point in a bigger canvas, and a smaller box gets a smaller one
+      const side = Math.min(1000, Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)));
+      if (side > 0 && canvas.width !== side) {
+        canvas.width = canvas.height = side;
+        gl.viewport(0, 0, side, side);
+      }
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, prev);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, cur);
+      gl.uniform1f(uT, frames < 2 ? 1 : Math.min(1, (now - at) / gap));
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      window.__ymcVibeFrames = (window.__ymcVibeFrames || 0) + 1;
+    },
+    stop() {
+      video.cancelVideoFrameCallback(id);
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    },
+  };
+}
+
 function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
   const box = useRef(null);
   const video = useRef(null);
+  const canvas = useRef(null);
   const state = useRef({});
   const light = theme.value === "light" || (theme.value === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
+  // 30 fps is the economy setting: the plain video, no blending
+  const smooth = vibeFps.value !== 30;
+  const [blending, setBlending] = useState(false);
   state.current = { playing: !!active && p.playing.value, pulseAt, paused };
 
+  // re-runs on a theme switch too: the video element is recreated then
   useEffect(() => {
     const el = box.current;
     const v = video.current;
@@ -300,16 +410,32 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
     let raf = 0;
     let visible = true;
     let last = performance.now();
+    let blend = null;
+    // the video stays visible (with its poster) until the canvas has a frame to show
+    setBlending(false);
+    if (smooth && canvas.current) {
+      try {
+        blend = startBlend(canvas.current, v, () => setBlending(true));
+      } catch {
+        blend = null; // the plain video stays
+      }
+    }
     const sm = { bass: 0, energy: 0, pulse: 0, rate: 1 };
+    const skip = makePacer();
     const canRun = () => visible && !document.hidden && !state.current.paused && windowVisible.peek();
     const frame = (now) => {
       raf = 0;
       if (!canRun()) return;
+      if (skip(now)) {
+        raf = requestAnimationFrame(frame);
+        return;
+      }
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       const st = state.current;
-      const lv = st.playing ? graph.levels() : null;
-      const target = lv || { bass: st.playing ? 0.18 + 0.06 * Math.sin(now / 430) : 0, energy: st.playing ? 0.3 : 0 };
+      const react = vibeReact.peek();
+      const lv = st.playing && react ? graph.levels() : null;
+      const target = lv || { bass: st.playing && react ? 0.18 + 0.06 * Math.sin(now / 430) : 0, energy: st.playing && react ? 0.3 : 0 };
       sm.bass += (target.bass - sm.bass) * (1 - Math.exp(-dt * 10));
       sm.energy += (target.energy - sm.energy) * (1 - Math.exp(-dt * 5));
       if (st.pulseAt && st.pulseAt !== sm.pulseAt) {
@@ -322,6 +448,7 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
       el.style.setProperty("--vibe-glow", (1 + sm.energy * 0.22 + sm.pulse * 0.25).toFixed(3));
       const rate = st.playing ? 1 + Math.round(sm.energy * 4) / 10 : 0.55;
       if (Math.abs(rate - sm.rate) > 0.05) v.playbackRate = sm.rate = rate;
+      blend?.draw(now);
       raf = requestAnimationFrame(frame);
     };
     const kick = () => {
@@ -347,16 +474,19 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
       io.disconnect();
       unsub();
       document.removeEventListener("visibilitychange", kick);
+      blend?.stop();
       v.pause();
     };
-  }, []);
+  }, [light, smooth]);
 
   useEffect(() => {
     state.current.kick?.();
   }, [paused]);
 
   return (
-    <div class={`vibe-canvas vibe-official ${active && p.playing.value ? "is-playing" : ""}`} ref={box} style={{ "--vibe-hue": `${hueFor(colors)}deg` }} aria-hidden="true">
+    <div class={`vibe-canvas vibe-official ${blending ? "is-blend" : ""} ${active && p.playing.value ? "is-playing" : ""}`} ref={box} style={{ "--vibe-hue": `${hueFor(colors)}deg` }} aria-hidden="true">
+      {/* a WebGL context can't be reused after stop(): a new canvas per theme and mode */}
+      {smooth && <canvas ref={canvas} key={`blend-${light ? "light" : "dark"}`} />}
       <video
         ref={video}
         key={light ? "light" : "dark"}

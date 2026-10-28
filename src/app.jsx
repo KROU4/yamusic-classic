@@ -6,6 +6,7 @@ import { me as meSignal } from "./lib/session.js";
 import { mini } from "./lib/desktop.js";
 import { Topbar } from "./components/Header.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
+import { Logo } from "./components/Logo.jsx";
 import { PlayerBar } from "./components/PlayerBar.jsx";
 import { SidePanel } from "./components/SidePanels.jsx";
 import { ContextMenu } from "./components/ContextMenu.jsx";
@@ -60,7 +61,7 @@ function Page({ me, reconnect }) {
 function NoSession({ onRetry }) {
   return (
     <div class="nosession">
-      <div class="logo-mark big">▶</div>
+      <Logo size={72} class="big" />
       <h1>Нужна сессия Яндекс Музыки</h1>
       <p>
         Клиент использует вход из официального приложения Яндекс Музыки на этом компьютере. Откройте его, войдите в аккаунт (один раз) и нажмите «Повторить».
