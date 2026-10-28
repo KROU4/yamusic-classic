@@ -32,6 +32,12 @@ export const DEFAULT_PREFS = {
   globalHotkeys: false,
 };
 
+/** Yandex ID avatar; "0/0-0" (or empty) is the grey placeholder — the UI shows the initial instead. */
+export function avatarUrl(id, size) {
+  if (typeof id !== "string" || !/^\d+\/[\w-]+$/.test(id) || id.startsWith("0/0")) return null;
+  return `https://avatars.mds.yandex.net/get-yapic/${id}/${size}`;
+}
+
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 
 export class Service {
@@ -98,7 +104,8 @@ export class Service {
     this.api.uid = found.account.account.uid;
     this.account = found.account;
     this.sessionSource = found.source;
-    const settings = await this.api.accountSettings().catch(() => null);
+    const [settings, about] = await Promise.all([this.api.accountSettings().catch(() => null), this.api.accountAbout().catch(() => null)]);
+    this.about = about;
     if (settings && this.store.get("prefs")?.aiReduced === undefined) {
       this.setPrefs({ aiReduced: settings.aiContentReductionEnabled !== false });
     }
@@ -120,7 +127,8 @@ export class Service {
       login: a.login,
       name: a.displayName || a.fullName || a.login,
       hasPlus: !!this.account.plus?.hasPlus,
-      avatar: this.account.defaultEmail ? null : null,
+      avatar: avatarUrl(this.about?.avatarId, "islands-retina-middle"),
+      avatarLarge: avatarUrl(this.about?.avatarId, "islands-200"),
       region: a.region,
     };
   }

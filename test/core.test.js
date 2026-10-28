@@ -7,6 +7,16 @@ import { parseLrc, isCensoredText } from "../server/lyrics.js";
 import { preferOriginal, isExplicitTwin } from "../server/uncensor.js";
 import { normTrack, coverUrl } from "../server/normalize.js";
 import { settingsSeeds } from "../server/wave.js";
+import { avatarUrl } from "../server/service.js";
+
+describe("avatar", () => {
+  it("builds the Yandex ID avatar URL and rejects placeholders and junk", () => {
+    expect(avatarUrl("12345/AbC-9", "islands-200")).toBe("https://avatars.mds.yandex.net/get-yapic/12345/AbC-9/islands-200");
+    expect(avatarUrl("0/0-0", "islands-200")).toBe(null);
+    expect(avatarUrl("../../x", "islands-200")).toBe(null);
+    expect(avatarUrl(undefined, "islands-200")).toBe(null);
+  });
+});
 
 const track = (id, artistId, title, extra = {}) => ({
   id: String(id),

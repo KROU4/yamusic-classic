@@ -89,6 +89,10 @@ export class YandexMusic {
   accountSettings() {
     return this.get("/account/settings");
   }
+  /** Profile card: avatarId, publicName, region codes (account/status has no avatar). */
+  accountAbout() {
+    return this.get("/account/about");
+  }
 
   // ---- home ----
   landing(blocks) {

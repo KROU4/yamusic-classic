@@ -175,7 +175,10 @@ export function PlayerBar() {
   const st = p.stream.value;
   const liked = p.isLiked(t);
   return (
-    <footer class={`player ${t ? "" : "is-empty"}`}>
+    <footer
+      class={`player ${t ? "" : "is-empty"}`}
+      style={t?.color && /^#[0-9a-f]{6}$/i.test(t.color) ? { "--player-tint": `color-mix(in srgb, ${t.color} 24%, var(--player-bg))` } : undefined}
+    >
       <div class="player-track">
         {t ? (
           <>
@@ -196,9 +199,12 @@ export function PlayerBar() {
             <button class={`icon-btn like ${liked ? "on" : ""}`} onClick={() => p.like(t)} aria-label="Мне нравится">
               <Icon name={liked ? "heart" : "heartOutline"} />
             </button>
-            <button class={`icon-btn ${p.isDisliked(t) ? "on-bad" : ""}`} onClick={() => p.dislike(t)} aria-label="Не нравится" title="Не нравится — и не предлагать">
-              <Icon name="ban" />
-            </button>
+            {/* as in the official bar: «не нравится» only where it steers recommendations — on the wave */}
+            {ctx?.type === "wave" && (
+              <button class={`icon-btn ${p.isDisliked(t) ? "on-bad" : ""}`} onClick={() => p.dislike(t)} aria-label="Не нравится" title="Не нравится — и не предлагать">
+                <Icon name="ban" />
+              </button>
+            )}
           </>
         ) : (
           <div class="player-hint">Включите «Мою волну» или любой трек</div>

@@ -82,6 +82,8 @@ export function Sidebar({ me }) {
   const name = route.value.name;
   const collapsed = sidebarCollapsed.value;
   const tab = route.value.params?.tab;
+  // no avatar or it failed to load (offline) — the initial stays
+  const [avatarFailed, setAvatarFailed] = useState(false);
   return (
     <aside class={`sidebar ${collapsed ? "is-collapsed" : ""}`} aria-label="Боковое меню">
       <div class="sb-head">
@@ -90,9 +92,7 @@ export function Sidebar({ me }) {
             <Icon name="play" size={14} />
           </span>
           {!collapsed && (
-            <span class="logo-text">
-              Музыка <small>classic</small>
-            </span>
+            <span class="logo-text">Музыка</span>
           )}
         </a>
         <button class="icon-btn sb-collapse" onClick={() => (sidebarCollapsed.value = !collapsed)} aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"} title={collapsed ? "Развернуть меню" : "Свернуть меню"}>
@@ -140,8 +140,12 @@ export function Sidebar({ me }) {
 
       <div class="sb-foot">
         <a class={`sb-user ${name === "settings" ? "on" : ""}`} href={href("/settings")} title="Настройки">
-          <span class="avatar">
-            {(me?.name || "?").slice(0, 1).toUpperCase()}
+          <span class={`avatar ${me?.hasPlus ? "plus" : ""}`}>
+            {me?.avatar && !avatarFailed ? (
+              <img src={me.avatar} alt="" onError={() => setAvatarFailed(true)} referrerpolicy="no-referrer" />
+            ) : (
+              (me?.name || "?").slice(0, 1).toUpperCase()
+            )}
             {me?.hasPlus && <span class="plus-dot" />}
           </span>
           {!collapsed && (
