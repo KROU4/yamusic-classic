@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "gradient-text",
+        "value": "*",
+        "files": [
+          "src/styles/app.css"
+        ],
+        "createdAt": "2026-10-28T12:40:17.403Z",
+        "reason": "karaoke word fill (.karaoke .kw): background-clip text shows the sung part of the current word — functional progress, not decoration"
+      }
+    ]
+  }
+}

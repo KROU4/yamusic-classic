@@ -1,5 +1,5 @@
 // Full-screen Now Playing: large cover on a blurred background in the track's color + synced lyrics.
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { nowPlayingOpen } from "../lib/ui.js";
 import { Progress, Volume } from "./PlayerBar.jsx";
@@ -39,6 +39,8 @@ export function NowPlaying() {
   if (!open || !t) return null;
   const liked = p.isLiked(t);
   const cover = bigCover(t.cover);
+  // narrow windows have room for one column: the cover or the lyrics, switched in the header
+  const [view, setView] = useState("cover");
   const ctx = p.context.value;
   return (
     <div class="np" role="dialog" aria-label="Сейчас играет" style={{ "--np-accent": t.color || "#333" }}>
@@ -49,12 +51,23 @@ export function NowPlaying() {
       <button class="icon-btn np-close" onClick={() => (nowPlayingOpen.value = false)} aria-label="Свернуть" title="Свернуть (Esc)">
         <Icon name="down" size={22} />
       </button>
-      <div class="np-body">
+      <div class="np-switch" role="tablist" aria-label="Что показывать">
+        {[
+          ["cover", "Обложка"],
+          ["lyrics", "Текст"],
+        ].map(([k, l]) => (
+          <button key={k} role="tab" aria-selected={view === k} class={`chip ${view === k ? "on" : ""}`} onClick={() => setView(k)}>
+            {l}
+          </button>
+        ))}
+      </div>
+      <div class={`np-body show-${view}`}>
         <div class="np-left">
           <div class="np-cover">{cover ? <img src={cover} alt="" /> : <div class="ph" />}</div>
           <div class="np-meta">
             <div class="np-title">
-              {t.title} {t.explicit && <ExplicitBadge />}
+              <span class="np-title-text">{t.title}</span>
+              {t.explicit && <ExplicitBadge />}
             </div>
             {t.version && <div class="np-version">{t.version}</div>}
             <Artists track={t} />

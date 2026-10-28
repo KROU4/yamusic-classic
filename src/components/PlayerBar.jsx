@@ -46,10 +46,20 @@ export function Progress() {
       onPointerMove={(e) => dur && setHover({ x: e.clientX - bar.current.getBoundingClientRect().left, t: at(e) })}
       onPointerLeave={() => setHover(null)}
       role="slider"
+      tabIndex={dur ? 0 : -1}
       aria-label="Позиция трека"
       aria-valuemin={0}
       aria-valuemax={Math.round(dur)}
       aria-valuenow={Math.round(pos)}
+      aria-valuetext={`${seconds(pos)} из ${seconds(dur)}`}
+      onKeyDown={(e) => {
+        const to = { ArrowLeft: pos - 5, ArrowRight: pos + 5, PageDown: pos - 30, PageUp: pos + 30, Home: 0, End: dur - 1 }[e.key];
+        if (to == null || !dur) return;
+        // the slider owns the arrows while focused (the global hotkeys would seek by 10 s on top)
+        e.preventDefault();
+        e.stopPropagation();
+        p.seek(Math.max(0, Math.min(dur - 0.5, to)));
+      }}
     >
       <div class="progress-buf" style={{ width: `${buf}%` }} />
       <div class="progress-fill" style={{ width: `${pct}%` }} />
@@ -89,10 +99,19 @@ export function Volume() {
         onPointerDown={onDown}
         onWheel={(e) => p.setVolume(p.volume.value + (e.deltaY < 0 ? 0.05 : -0.05))}
         role="slider"
+        tabIndex={0}
         aria-label="Громкость"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(v * 100)}
+        aria-valuetext={`${Math.round(v * 100)}%`}
+        onKeyDown={(e) => {
+          const to = { ArrowLeft: v - 0.05, ArrowDown: v - 0.05, ArrowRight: v + 0.05, ArrowUp: v + 0.05, Home: 0, End: 1 }[e.key];
+          if (to == null) return;
+          e.preventDefault();
+          e.stopPropagation();
+          p.setVolume(to);
+        }}
       >
         <div class="volume-fill" style={{ width: `${v * 100}%` }} />
       </div>
@@ -158,7 +177,8 @@ function MoreMenu({ t, ctx, st }) {
   const left = sleep?.mode === "time" ? Math.max(1, Math.ceil((sleep.at - Date.now()) / 60000)) : null;
   const rate = p.rate.value;
   const eqOn = webAudio && eq.value.enabled;
-  const changed = !!sleep || rate !== 1 || eqOn;
+  // the timer and speed show as chips in the bar; the dot only flags what has no chip (the equalizer)
+  const changed = eqOn;
   const label = sleep ? (sleep.mode === "track" ? "Ещё · таймер сна: до конца трека" : `Ещё · таймер сна: ${left} мин`) : "Ещё";
   return (
     <div class="popover-wrap" ref={box}>
@@ -215,6 +235,28 @@ function MoreMenu({ t, ctx, st }) {
             </div>
           </div>
 
+          {/* in the narrowest window lyrics and queue leave the bar too */}
+          <div class="more-group xs-only">
+            <button class={`menu-item more-row ${panel.value === "lyrics" ? "on" : ""}`} onClick={() => (togglePanel("lyrics"), setOpen(false))} disabled={!t}>
+              <Icon name="lyrics" size={18} /> Текст песни
+            </button>
+            <button class={`menu-item more-row ${panel.value === "queue" ? "on" : ""}`} onClick={() => (togglePanel("queue"), setOpen(false))}>
+              <Icon name="queue" size={18} /> Очередь
+            </button>
+          </div>
+
+          {/* in a narrow window shuffle and repeat leave the bar and live here */}
+          <div class="more-group narrow-only">
+            <button class={`menu-item more-row ${p.shuffle.value ? "on" : ""}`} onClick={p.toggleShuffle} aria-pressed={p.shuffle.value}>
+              <Icon name="shuffle" size={18} /> Перемешивать
+              <span class="more-row-value">{p.shuffle.value ? "вкл." : "выкл."}</span>
+            </button>
+            <button class={`menu-item more-row ${p.repeat.value !== "none" ? "on" : ""}`} onClick={p.cycleRepeat}>
+              <Icon name={p.repeat.value === "one" ? "repeatOne" : "repeat"} size={18} /> Повтор
+              <span class="more-row-value">{{ none: "выкл.", all: "всё", one: "трек" }[p.repeat.value]}</span>
+            </button>
+          </div>
+
           {webAudio && (
             <div class="more-group">
               <button class={`menu-item more-row ${eqOpen ? "on" : ""}`} onClick={() => setEqOpen(!eqOpen)} aria-expanded={eqOpen}>
@@ -238,6 +280,44 @@ function MoreMenu({ t, ctx, st }) {
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Only non-default states earn a place in the bar: a running sleep timer, a changed speed, lossless audio.
+ * Each chip opens nothing by itself — it's a status line; the settings live in «Ещё».
+ */
+function StateChips({ st }) {
+  const sleep = p.sleepTimer.value;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (sleep?.mode !== "time") return;
+    const id = setInterval(() => tick((x) => x + 1), 30000);
+    return () => clearInterval(id);
+  }, [sleep]);
+  const until = sleep?.mode === "time" ? new Date(sleep.at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : null;
+  const rate = p.rate.value;
+  const lossless = st?.quality === "lossless";
+  if (!sleep && rate === 1 && !lossless) return null;
+  return (
+    <div class="state-chips">
+      {sleep && (
+        <span class="state-chip" title={sleep.mode === "track" ? "Таймер сна: музыка остановится после этого трека" : `Таймер сна: музыка остановится в ${until}`}>
+          <Icon name="moon" size={14} />
+          {sleep.mode === "track" ? "трек" : until}
+        </span>
+      )}
+      {rate !== 1 && (
+        <button class="state-chip" onClick={() => p.setRate(1)} title="Скорость воспроизведения. Нажмите, чтобы вернуть 1×">
+          {rateLabel(rate)}
+        </button>
+      )}
+      {lossless && (
+        <span class="state-chip hq" title={`${st.codec}, ${st.bitrate} кбит/с`}>
+          FLAC
+        </span>
       )}
     </div>
   );
@@ -318,10 +398,11 @@ export function PlayerBar() {
       </div>
 
       <div class="player-extra">
-        <button class={`icon-btn ${panel.value === "lyrics" ? "on" : ""}`} onClick={() => togglePanel("lyrics")} aria-label="Текст песни" aria-pressed={panel.value === "lyrics"} title="Текст песни" disabled={!t}>
+        <StateChips st={st} />
+        <button class={`icon-btn opt-xs ${panel.value === "lyrics" ? "on" : ""}`} onClick={() => togglePanel("lyrics")} aria-label="Текст песни" aria-pressed={panel.value === "lyrics"} title="Текст песни" disabled={!t}>
           <Icon name="lyrics" />
         </button>
-        <button class={`icon-btn ${panel.value === "queue" ? "on" : ""}`} onClick={() => togglePanel("queue")} aria-label="Очередь" aria-pressed={panel.value === "queue"} title="Очередь">
+        <button class={`icon-btn opt-xs ${panel.value === "queue" ? "on" : ""}`} onClick={() => togglePanel("queue")} aria-label="Очередь" aria-pressed={panel.value === "queue"} title="Очередь">
           <Icon name="queue" />
         </button>
         <DevicesButton />

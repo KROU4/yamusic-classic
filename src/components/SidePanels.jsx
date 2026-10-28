@@ -56,8 +56,14 @@ export function Lyrics() {
           <div class="lyrics-title">{t.title}</div>
           <div class="lyrics-artist">{artistNames(t)}</div>
         </div>
-        {state.status === "loading" && <div class="panel-empty"><span class="spinner" /></div>}
-        {state.status === "empty" && <div class="panel-empty">Текста для этой песни пока нет ни у Яндекса, ни в LRCLIB</div>}
+        {state.status === "loading" && (
+          <div class="lyrics-skeleton" aria-label="Загружаем текст">
+            {[72, 54, 80, 46, 66, 58].map((w, i) => (
+              <i key={i} style={{ width: `${w}%` }} />
+            ))}
+          </div>
+        )}
+        {state.status === "empty" && <div class="panel-empty lyrics-none">Для этой песни текста пока нет</div>}
         {state.status === "error" && <div class="panel-empty">Не удалось загрузить текст: {state.error}</div>}
         {state.status === "ok" &&
           (data.synced ? (

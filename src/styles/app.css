@@ -2,6 +2,7 @@
 /* Tokens follow the official client's CSS (.ym-dark-theme / .ym-light-theme, web 2025 accent):
    basic window background, a rounded content panel, a floating player bar tinted by the cover. */
 :root {
+  --page-pad: 40px;
   --font: "YS Text", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   --accent: #fc3;
   --accent-hover: #ffd966;
@@ -26,7 +27,17 @@
   --vibe-fg: #ffffff;
   --text: #e6e6e6;
   --text-2: rgba(255, 255, 255, 0.5);
-  --text-3: rgba(255, 255, 255, 0.32);
+  --text-3: rgba(255, 255, 255, 0.56);
+  --text-4: rgba(255, 255, 255, 0.32); /* decoration only, never text */
+  --accent-text: var(--accent);
+  --like: #ff4f6d;
+  --success: #37c84f;
+  --plus-ring: #ff8a3d;
+  --z-panel: 20;
+  --z-np: 40;
+  --z-popover: 60;
+  --z-modal: 70;
+  --z-toast: 80;
   --line: rgba(255, 255, 255, 0.08);
   --divider: rgba(255, 255, 255, 0.04);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.48);
@@ -48,7 +59,10 @@
   --vibe-fg: #121212;
   --text: #1a1a1a;
   --text-2: #666666;
-  --text-3: rgba(0, 0, 0, 0.4);
+  --text-3: #707070;
+  --text-4: rgba(0, 0, 0, 0.3);
+  --accent-text: #8a6100; /* the yellow accent is unreadable as text on white */
+  --like: #e5304f;
   --line: rgba(0, 0, 0, 0.08);
   --divider: rgba(0, 0, 0, 0.1);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
@@ -94,6 +108,30 @@ button:disabled {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+:root[data-theme="light"] :focus-visible {
+  outline-color: #1a1a1a;
+}
+/* a yellow ring around a yellow control is invisible */
+.play-main:focus-visible,
+.chip.on:focus-visible,
+.btn.primary:focus-visible,
+.sb-update:focus-visible {
+  outline-color: var(--text);
+  outline-offset: 3px;
+}
+.search:focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+/* elements clipped by an overflow:hidden parent draw their ring inside */
+.card a:focus-visible,
+.pin-main:focus-visible,
+.sb-nav a:focus-visible {
+  outline-offset: -2px;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--text);
 }
 img {
   display: block;
@@ -141,9 +179,9 @@ h3 {
   scrollbar-gutter: stable;
 }
 .page {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 8px 40px 48px;
+  max-width: 1480px;
+  margin: 0;
+  padding: 8px var(--page-pad) 48px;
 }
 .main::-webkit-scrollbar,
 .side-panel ::-webkit-scrollbar {
@@ -378,10 +416,16 @@ h3 {
   background: var(--bg-hover);
 }
 .sb-hint {
+  display: flex;
+  gap: 6px;
   margin: 10px 8px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
   color: var(--text-3);
+}
+.sb-hint .icon {
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 .sb-update {
   display: flex;
@@ -447,7 +491,7 @@ h3 {
 }
 /* Plus subscribers get the gradient ring around the avatar, as in the official client */
 .avatar.plus {
-  box-shadow: 0 0 0 2px var(--sidebar-bg), 0 0 0 4px #ff8a3d;
+  box-shadow: 0 0 0 2px var(--sidebar-bg), 0 0 0 4px var(--plus-ring);
 }
 .plus-dot {
   position: absolute;
@@ -469,7 +513,7 @@ h3 {
   align-items: center;
   gap: 16px;
   height: 64px;
-  padding: 0 40px;
+  padding: 0 var(--page-pad);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: blur(16px);
 }
@@ -550,7 +594,7 @@ h3 {
   color: var(--accent);
 }
 .icon-btn.like.on {
-  color: var(--danger);
+  color: var(--like);
 }
 .icon-btn.on-bad {
   color: var(--danger);
@@ -718,7 +762,7 @@ h3 {
   position: relative;
   min-height: clamp(340px, 46vh, 460px);
   padding: 32px 0;
-  margin: 0 -40px 8px;
+  margin: 0 calc(-1 * var(--page-pad)) 8px;
   display: grid;
   place-items: center;
   isolation: isolate;
@@ -807,6 +851,7 @@ h3 {
   }
 }
 .vibe-center {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -814,6 +859,16 @@ h3 {
   padding: 0 24px;
   text-align: center;
   max-width: 100%;
+}
+/* the orb is brightest exactly where the title sits: a soft shade under the text keeps it readable
+   without dimming the rest of the animation */
+.vibe-center::before {
+  content: "";
+  position: absolute;
+  inset: -26% -10%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--vibe-bg) 55%, transparent), transparent);
 }
 .vibe-title {
   display: inline-flex;
@@ -823,7 +878,7 @@ h3 {
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--vibe-fg);
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.25);
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--vibe-bg) 60%, transparent), 0 2px 18px color-mix(in srgb, var(--vibe-bg) 55%, transparent);
   transition: transform 0.2s var(--ease);
 }
 .vibe-title:hover {
@@ -1069,7 +1124,7 @@ h3 {
   color: var(--accent);
 }
 :root[data-theme="light"] .track.is-current .t {
-  color: #b8860b;
+  color: var(--accent-text);
 }
 .track.is-unavailable {
   opacity: 0.45;
@@ -1097,7 +1152,7 @@ h3 {
   font-weight: 500;
 }
 .chart-pos .up {
-  color: #4cd964;
+  color: var(--success);
 }
 .chart-pos .down {
   color: var(--danger);
@@ -1313,8 +1368,8 @@ h3 {
   grid-column: 2;
   position: relative;
   display: grid;
-  /* the extras take what they need, the track info gets the rest */
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 400px) max-content;
+  /* side columns are equal so the transport sits exactly in the middle of the bar */
+  grid-template-columns: minmax(200px, 1fr) minmax(280px, 520px) minmax(200px, 1fr);
   align-items: center;
   gap: 1rem;
   padding: 0 0.75rem 0 0.5rem;
@@ -1746,14 +1801,16 @@ h3 {
 }
 .setting {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
+  gap: 12px 24px;
   padding: 16px 0;
   border-bottom: 1px solid var(--line);
 }
 .setting-text {
   display: flex;
+  flex: 1 1 260px;
   flex-direction: column;
   gap: 3px;
   min-width: 0;
@@ -1837,13 +1894,13 @@ h3 {
 .toasts {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--player-h) + 16px);
+  bottom: calc(var(--player-h) + 2 * var(--gap) + 8px);
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 8px;
   align-items: center;
-  z-index: 50;
+  z-index: var(--z-toast);
   pointer-events: none;
 }
 .toast {
@@ -2437,11 +2494,12 @@ h3 {
 @media (max-width: 860px) {
   .side-panel {
     position: fixed;
-    right: 0;
-    top: 0;
-    bottom: var(--player-h);
-    width: min(380px, 100vw);
-    z-index: 8;
+    right: var(--gap);
+    top: var(--gap);
+    bottom: calc(var(--player-h) + 2 * var(--gap));
+    width: min(380px, calc(100vw - 2 * var(--gap)));
+    border-radius: var(--radius-xl);
+    z-index: var(--z-panel);
     box-shadow: var(--shadow);
   }
 }
@@ -2450,7 +2508,9 @@ h3 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
@@ -2623,13 +2683,22 @@ kbd {
     width: 72px;
   }
   .sidebar:not(.is-collapsed) .logo-text,
-  .sidebar:not(.is-collapsed) .sb-nav span,
+  .sb-collapse,
   .sidebar:not(.is-collapsed) .pin-text,
   .sidebar:not(.is-collapsed) .pin-x,
   .sidebar:not(.is-collapsed) .sb-hint,
   .sidebar:not(.is-collapsed) .sb-update span,
   .sidebar:not(.is-collapsed) .sb-user > .icon {
     display: none;
+  }
+  /* labels stay in the accessibility tree (screen readers) while visually icon-only */
+  .sidebar:not(.is-collapsed) .sb-nav span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
   .sidebar:not(.is-collapsed) .sb-head {
     flex-direction: column;
@@ -2671,7 +2740,7 @@ kbd {
   color: var(--text-2);
 }
 .pod-tabs {
-  margin-top: 36px;
+  margin-top: 4px;
 }
 .pod-continue {
   display: flex;
@@ -2783,7 +2852,7 @@ kbd {
   color: var(--accent);
 }
 :root[data-theme="light"] .episode.is-current .t {
-  color: #b8860b;
+  color: var(--accent-text);
 }
 .episode.is-unavailable {
   opacity: 0.45;
@@ -3430,4 +3499,354 @@ kbd {
 }
 .more-menu .eq-panel {
   padding: 4px 4px 0;
+}
+
+/* ---------- window sizes ----------
+   Windows snap layouts on 1080p give 960×1032 (half), 960×516 (quarter) and 640×1032 (third).
+   Width decides the player and page gutters, height decides the hero and the sidebar density. */
+.narrow-only {
+  display: none;
+}
+@media (max-width: 860px) {
+  .narrow-only {
+    display: flex;
+  }
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px;
+    padding: 0 6px 0 8px;
+  }
+  .player .icon-btn.opt,
+  .player .icon-btn.dislike,
+  .player-time,
+  .volume-bar {
+    display: none;
+  }
+  /* the progress becomes a thin seek line along the bar's top edge */
+  .player-progress {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    top: -6px;
+    display: block;
+  }
+  .player-controls {
+    gap: 2px;
+  }
+  .player-cover {
+    width: 48px;
+    height: 48px;
+  }
+  .np-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .np-right {
+    display: none;
+  }
+}
+@media (max-width: 700px) {
+  .topbar,
+  .page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .vibe {
+    margin: 0 -16px 8px;
+  }
+}
+@media (max-height: 720px) {
+  .vibe {
+    min-height: clamp(230px, 42vh, 320px);
+    padding: 16px 0;
+  }
+  .sb-head {
+    height: 52px;
+  }
+  .sb-nav a {
+    height: 36px;
+  }
+  .sb-hint {
+    display: none;
+  }
+}
+@media (max-height: 560px) {
+  :root {
+    --player-h: 4rem;
+    --gap: 0.5rem;
+  }
+  .player-cover {
+    width: 44px;
+    height: 44px;
+  }
+  .play-main {
+    width: 38px;
+    height: 38px;
+  }
+  .player-progress {
+    margin-top: -2px;
+  }
+  .vibe {
+    min-height: 200px;
+    padding: 8px 0;
+  }
+  .vibe-actions .vibe-tune {
+    height: 32px;
+  }
+  .topbar {
+    height: 52px;
+  }
+  .sb-nav {
+    gap: 0;
+  }
+  .sb-nav a {
+    height: 32px;
+  }
+  .sb-sep {
+    margin: 6px 20px;
+  }
+}
+
+/* ---------- player bar: state chips, slider hit areas, widths ---------- */
+.player-extra {
+  justify-self: end;
+}
+.player-track {
+  padding-right: 12px;
+}
+.state-chips {
+  display: flex;
+  gap: 6px;
+  margin-right: 6px;
+}
+.state-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  white-space: nowrap;
+}
+.state-chip.hq {
+  color: var(--accent-text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+button.state-chip:hover {
+  color: var(--text);
+}
+.progress:focus-visible,
+.volume-bar:focus-visible {
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.xs-only {
+  display: none;
+}
+@media (max-width: 1180px) {
+  .player {
+    grid-template-columns: minmax(180px, 1fr) minmax(260px, 420px) minmax(180px, 1fr);
+  }
+}
+@media (max-width: 860px) {
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .state-chips {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .xs-only {
+    display: flex;
+  }
+  .player .icon-btn.opt-xs {
+    display: none;
+  }
+}
+
+/* ---------- Now Playing: fits any window ---------- */
+.np-body {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.np-cover {
+  /* the cover yields to the window height so the controls under it stay visible */
+  width: min(100%, calc(100dvh - 400px));
+  min-width: 160px;
+  align-self: center;
+}
+.np-title {
+  font-size: clamp(22px, 2.4vw, 28px);
+}
+.np-title-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.np .vibe-canvas {
+  opacity: 0.5;
+}
+.np-switch {
+  display: none;
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  gap: 6px;
+}
+@media (max-width: 860px) {
+  .np-switch {
+    display: flex;
+  }
+  .np-body {
+    padding: 72px 24px 24px;
+    gap: 0;
+  }
+  .np-body.show-cover .np-right,
+  .np-body.show-lyrics .np-left {
+    display: none;
+  }
+  .np-body.show-lyrics .np-right {
+    display: flex;
+    height: calc(100dvh - 110px);
+  }
+}
+@media (max-height: 640px) {
+  .np-body {
+    padding-top: 40px;
+    padding-bottom: 24px;
+  }
+  /* short window: cover beside the title, controls below */
+  .np-left {
+    display: grid;
+    grid-template-columns: min(34vh, 200px) minmax(0, 1fr);
+    column-gap: 20px;
+    row-gap: 12px;
+    align-items: center;
+  }
+  .np-cover {
+    width: 100%;
+    min-width: 0;
+    grid-row: span 1;
+  }
+  .np-progress,
+  .np-controls,
+  .np-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+/* short windows (a quarter of the screen): the sidebar scrolls instead of clipping the profile */
+@media (max-height: 640px) {
+  .sidebar {
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .sb-scroll {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+  .sb-foot {
+    height: auto;
+    margin-top: auto;
+    padding: 6px 10px;
+  }
+}
+
+/* ---------- pages at small widths ---------- */
+.tracklist {
+  max-width: 1200px;
+}
+.home-tabs,
+.subtabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.setting .chips {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+@media (max-width: 1000px) {
+  :root {
+    --page-pad: 24px;
+  }
+}
+@media (max-width: 700px) {
+  :root {
+    --page-pad: 16px;
+  }
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .page-cover {
+    width: 160px;
+    height: 160px;
+  }
+  .page-head h1 {
+    font-size: 28px;
+  }
+  .setting .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* an odd last tile takes the whole row instead of hanging alone */
+  .tiles > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}
+@media (max-height: 640px) {
+  .page-cover {
+    width: 140px;
+    height: 140px;
+  }
+  .page-head {
+    margin-bottom: 12px;
+  }
+}
+
+/* Now Playing: cover aligned with the title; without lyrics one centred column */
+.np-cover {
+  align-self: flex-start;
+}
+.np .vibe-canvas {
+  opacity: 0.32;
+}
+.np-body:has(.lyrics-none) {
+  grid-template-columns: minmax(320px, 460px);
+}
+.np-body:has(.lyrics-none) .np-right {
+  display: none;
+}
+/* loading lyrics: a few placeholder lines instead of a spinner */
+.lyrics-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 24px 20px;
+}
+.lyrics-skeleton i {
+  height: 18px;
+  border-radius: 9px;
+  background: var(--bg-hover);
+  animation: skeleton 1.4s ease-in-out infinite alternate;
+}
+@keyframes skeleton {
+  to {
+    opacity: 0.4;
+  }
 }

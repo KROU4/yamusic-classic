@@ -111,7 +111,7 @@ export function Sidebar({ me }) {
         {NAV.map(([key, path, icon, label]) => {
           const on = name === key && !(key === "collection" && tab && tab !== "likes");
           return (
-            <a key={key} href={href(path)} class={on ? "on" : ""} aria-current={on ? "page" : undefined} title={collapsed ? label : undefined}>
+            <a key={key} href={href(path)} class={on ? "on" : ""} aria-current={on ? "page" : undefined} title={label} aria-label={label}>
               <Icon name={icon} size={22} />
               {!collapsed && <span>{label}</span>}
             </a>
@@ -141,7 +141,9 @@ export function Sidebar({ me }) {
             ))}
           </ul>
         ) : (
-          !collapsed && <p class="sb-hint">Закрепляйте плейлисты, альбомы, исполнителей и настройки волны кнопкой «Закрепить» — они появятся здесь.</p>
+          !collapsed && <p class="sb-hint">
+              <Icon name="pin" size={14} /> Закреплённые альбомы, плейлисты и волны появятся здесь
+            </p>
         )}
       </div>
 
