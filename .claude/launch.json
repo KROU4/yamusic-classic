@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ymc-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/dev.js"],
+      "port": 4719
+    }
+  ]
+}

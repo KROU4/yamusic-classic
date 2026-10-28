@@ -1,0 +1,12 @@
+node_modules/
+dist/
+release/
+.data/
+*.log
+.env
+.env.*
+# секреты и пользовательские данные никогда не коммитим
+token*.txt
+session*.json
+.claude/docker-keep-running
+.omc/
