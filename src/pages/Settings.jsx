@@ -237,6 +237,16 @@ export function SettingsPage({ me, onReconnect }) {
       )}
 
       <section class="settings-group">
+        <h2>Другие устройства</h2>
+        <Toggle
+          label="Ynison: синхронизация с телефоном и другими устройствами (бета)"
+          hint="Клиент появится в списке устройств Яндекс Музыки: можно переключить воспроизведение с телефона сюда и обратно, управлять телефоном из кнопки «Устройства» в плеере. Пока выключено, клиент не подключается к Ynison"
+          checked={prefs.ynison}
+          onChange={(v) => save({ ynison: v })}
+        />
+      </section>
+
+      <section class="settings-group">
         <h2>Оформление</h2>
         <Choice
           label="Тема"

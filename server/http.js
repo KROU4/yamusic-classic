@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { ApiError } from "./yandex.js";
+import { ynisonRoutes } from "./ynison.js";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -74,6 +75,7 @@ export function buildRoutes(svc) {
     ["GET", /^\/api\/overrides$/, () => svc.listOverrides()],
     ["POST", /^\/api\/overrides$/, (q, m, b) => svc.setOverride(String(b.trackId), b.path)],
     ["POST", /^\/api\/overrides\/remove$/, (q, m, b) => svc.removeOverride(String(b.trackId))],
+    ...(svc.ynison ? ynisonRoutes(svc.ynison) : []),
   ];
 }
 

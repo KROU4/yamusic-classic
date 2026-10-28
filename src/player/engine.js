@@ -202,7 +202,7 @@ function afterStart(i) {
   maybeExtendWave();
 }
 
-async function load(i, { autoplay = true } = {}) {
+async function load(i, { autoplay = true, startAt = 0 } = {}) {
   cancelFade();
   const list = queue.value;
   const track = list[i];
@@ -236,6 +236,11 @@ async function load(i, { autoplay = true } = {}) {
     applyResolved(at, r, track);
     stream.value = r.stream;
     audio.src = r.stream.url;
+    // continuing from another device's position (Ynison): the element applies it once metadata arrives
+    if (startAt > 0) {
+      audio.currentTime = startAt;
+      position.value = startAt;
+    }
     srcTrack = queue.value[at];
     applyVolume();
     afterStart(at);
@@ -322,10 +327,13 @@ function order(tracks, startIndex) {
 // Queue generation: responses requested for the previous queue don't land in the new one
 let queueGen = 0;
 
-/** Play a list of tracks. ctx: { title, from, link } */
-export function playList(tracks, startIndex = 0, ctx = {}) {
+/**
+ * Play a list of tracks. ctx: { title, from, link }.
+ * opts (handing over from another device): { autoplay, startAt: seconds, keepOrder: don't reshuffle a queue that is already in play order }
+ */
+export function playList(tracks, startIndex = 0, ctx = {}, { keepOrder = false, ...opts } = {}) {
   finishSession("skip");
-  const { list, start } = order(tracks.filter(Boolean), startIndex);
+  const { list, start } = keepOrder ? { list: tracks, start: startIndex } : order(tracks.filter(Boolean), startIndex);
   intentGen++;
   queueGen++;
   skipStreak = 0;
@@ -333,7 +341,7 @@ export function playList(tracks, startIndex = 0, ctx = {}) {
     queue.value = list;
     context.value = { type: "list", ...ctx };
   });
-  return load(start);
+  return load(start, opts);
 }
 
 /** Start the wave (My Wave by default). */

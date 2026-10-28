@@ -12,6 +12,7 @@ import { WaveManager, WAVE_SETTINGS } from "./wave.js";
 import { Uncensor } from "./uncensor.js";
 import { getLyrics } from "./lyrics.js";
 import { PlayLog, computeStats } from "./stats.js";
+import { YnisonManager } from "./ynison.js";
 
 export const DEFAULT_PREFS = {
   allowExplicit: true, // don't ask the wave for "clean" output
@@ -30,6 +31,7 @@ export const DEFAULT_PREFS = {
   autostart: false,
   startMinimized: false,
   globalHotkeys: false,
+  ynison: false, // cross-device sync: off by default, never connects until the user opts in
 };
 
 /** Yandex ID avatar; "0/0-0" (or empty) is the grey placeholder — the UI shows the initial instead. */
@@ -63,6 +65,8 @@ export class Service {
     });
     this.cache = new Map();
     this.playlistLocks = new Map(); // kind -> tail of this playlist's edit chain
+    this.ynison = new YnisonManager(this);
+    this.onPrefs((next, patch) => "ynison" in patch && this.ynison.sync());
   }
 
   get prefs() {
@@ -98,6 +102,7 @@ export class Service {
     const found = await resolveSession({ validate });
     if (!found) {
       this.account = null;
+      this.ynison.sync();
       return { authorized: false };
     }
     this.api.token = found.token;
@@ -110,6 +115,7 @@ export class Service {
       this.setPrefs({ aiReduced: settings.aiContentReductionEnabled !== false });
     }
     this.refreshLibrary().catch((e) => this.log("library refresh failed", e.message));
+    this.ynison.reconnect(); // a new session (or token) gets a fresh connection, if the user enabled it
     return { authorized: true };
   }
 

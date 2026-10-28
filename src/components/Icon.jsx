@@ -47,6 +47,12 @@ const PATHS = {
   chevronRight: "M8.6 6.4 10 5l7 7-7 7-1.4-1.4 5.6-5.6z",
   sidebar: "M3 4h18v16H3zm2 2v12h4V6zm6 0v12h8V6z",
   eq: "M5 4h2v6h2v2H7v8H5v-8H3v-2h2zm6 0h2v10h2v2h-2v4h-2v-4H9v-2h2zm6 0h2v4h2v2h-2v10h-2V10h-2V8h2z",
+  // Ynison devices
+  devices: "M2 4h15v2H4v9h8v2H2zm13 4h6a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm1 2v8h4v-8zM5 18h7v2H5z",
+  phone: "M8 2h8a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 2v16h8V4zm3 13h2v2h-2z",
+  desktop: "M3 4h18v12h-7v2h3v2H7v-2h3v-2H3zm2 2v8h14V6z",
+  tv: "M3 5h18v12H3zm2 2v8h14V7zm2 12h10v2H7z",
+  speaker: "M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zm1 2v16h8V4zm4 1.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3zM12 11a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
 };
 
 export function Icon({ name, size = 20, class: cls = "", title }) {

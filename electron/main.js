@@ -425,6 +425,7 @@ app.on("before-quit", () => {
 // will-quit happens after windows are closed: by then the final listening is already recorded
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  backend?.svc.ynison?.stop(); // clean close, so other devices see us leave at once
   backend?.svc.store.saveNow();
 });
 
