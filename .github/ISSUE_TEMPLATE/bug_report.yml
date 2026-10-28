@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in YM Classic does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please never paste your Yandex OAuth token, cookies or the local server key (`#k=...`) here.
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched existing issues and this is not a duplicate
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the top of Settings (Настройки), next to the logo, and in the installer or exe file name.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: Build
+      options:
+        - Installer (YM-Classic-Setup-*.exe)
+        - Portable (YM-Classic-*-portable.exe)
+        - From source (npm start)
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: "Win+R, `winver`"
+      placeholder: "Windows 11 24H2 (build 26100)"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open My Wave
+        2. Pick the "Workout" activity
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+      description: Screenshots or a short screen recording help a lot for UI bugs.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        App data lives in `%APPDATA%\YM Classic`. For console output, run the exe from a terminal and copy the lines starting with `[ymc]`.
+        Remove anything that looks like a token or key before pasting.
+      render: text
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Account region, whether the official Yandex Music app is installed and logged in, quality setting (lossless/AAC), Ynison on/off.

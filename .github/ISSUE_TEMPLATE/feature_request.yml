@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest an improvement or a new feature
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: searched
+    attributes:
+      label: Before you start
+      options:
+        - label: I searched existing issues and discussions and this was not proposed yet
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is missing or annoying today? Describe the situation, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How should it work? Mockups or screenshots of the official app (old or new) are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Player / sound
+        - My Wave / recommendations
+        - Lyrics
+        - UI / design
+        - Podcasts & audiobooks
+        - Other devices (Ynison)
+        - Windows integration
+        - Other
