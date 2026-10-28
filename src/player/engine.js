@@ -75,6 +75,40 @@ let sleepFadeTimer = null;
 
 const playable = (t) => t && (t.available || t.substituted?.available);
 
+// ---------- podcasts and audiobooks: continue from the saved position (rememberPosition, as the official client) ----------
+const remembers = (t) => t?.rememberPosition === true;
+// id of the episode whose start position has been applied. Progress sync (player/podcast.js) waits for it,
+// so the first moments played from zero before the seek can never overwrite the position saved on the server
+export const resumeReady = signal(null);
+
+/** Start position of an episode: fresh from the server (another device may have moved it), else the list's value. */
+function resumeFor(track) {
+  resumeReady.value = null;
+  if (!remembers(track)) return Promise.resolve(0);
+  const local = track.progress?.finished ? 0 : track.progress?.pos || 0;
+  const fresh = api
+    .post("/podcasts/progress", { ids: [track.id] })
+    .then((r) => (r?.[track.id] ? r[track.id].pos : local))
+    .catch(() => local);
+  return Promise.race([fresh, new Promise((r) => setTimeout(() => r(local), 3000))]);
+}
+
+/** Seek to the resume point once the element knows its duration (setting currentTime earlier is unreliable). */
+function startFrom(el, sec, track) {
+  if (!remembers(track)) return;
+  const apply = () => {
+    if (el !== audio || srcTrack !== track) return;
+    if (sec > 0 && sec < (el.duration || Infinity) - 1) {
+      el.currentTime = sec;
+      position.value = sec;
+      if (session) session.lastPos = sec;
+    }
+    resumeReady.value = track.id;
+  };
+  if (el.readyState >= 1) apply();
+  else el.addEventListener("loadedmetadata", apply, { once: true });
+}
+
 // ---------- audio elements ----------
 function createElement() {
   const el = new Audio();
@@ -139,7 +173,9 @@ function finishSession(reason, opts) {
   session = null;
   if (!s || !s.track) return Promise.resolve();
   const durationSeconds = (s.track.durationMs || 0) / 1000 || duration.value;
-  const jobs = [api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId }, opts).catch(() => {})];
+  // episodes report where the player stopped (endPositionSeconds is a position, not the amount listened)
+  const endPositionSeconds = remembers(s.track) ? s.lastPos : undefined;
+  const jobs = [api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId, endPositionSeconds }, opts).catch(() => {})];
   if (context.value?.type === "wave") {
     const type = reason === "ended" ? "trackFinished" : "skip";
     jobs.push(api.post("/wave/feedback", { type, track: s.track, playedSeconds: s.played }, opts).catch(() => {}));
@@ -224,7 +260,7 @@ async function load(i, { autoplay = true } = {}) {
     return skipUnplayable(`«${track.title}» недоступен, пропускаю`);
   }
   try {
-    const r = await resolveTrack(track);
+    const [r, startAt] = await Promise.all([resolveTrack(track), resumeFor(track)]);
     if (token !== loadToken) return;
     // while waiting for the link the queue could have been edited (reorder, removal, insertion) — find the track again
     const at = queue.value[index.value] === track ? index.value : queue.value.indexOf(track);
@@ -239,6 +275,7 @@ async function load(i, { autoplay = true } = {}) {
     srcTrack = queue.value[at];
     applyVolume();
     afterStart(at);
+    startFrom(audio, startAt, srcTrack);
     if (autoplay) await audio.play().catch(() => {});
   } catch (e) {
     if (token !== loadToken) return;
@@ -261,7 +298,8 @@ function startCrossfade() {
   const seconds = audioConfig.value.crossfade / (rate.value || 1);
   const i = index.value + 1;
   const nextTrack = queue.value[i];
-  if (!nextTrack || !playable(nextTrack) || !isFresh(nextTrack.id)) return false;
+  // episodes don't crossfade: they start through load(), which restores the saved position
+  if (!nextTrack || !playable(nextTrack) || !isFresh(nextTrack.id) || remembers(nextTrack) || remembers(current.value)) return false;
   const entry = resolved.get(nextTrack.id);
 
   finishSession("ended");
@@ -325,7 +363,8 @@ let queueGen = 0;
 /** Play a list of tracks. ctx: { title, from, link } */
 export function playList(tracks, startIndex = 0, ctx = {}) {
   finishSession("skip");
-  const { list, start } = order(tracks.filter(Boolean), startIndex);
+  // ctx.ordered: episodes and chapters keep their order even with shuffle on
+  const { list, start } = ctx.ordered ? { list: tracks.filter(Boolean), start: startIndex } : order(tracks.filter(Boolean), startIndex);
   intentGen++;
   queueGen++;
   skipStreak = 0;

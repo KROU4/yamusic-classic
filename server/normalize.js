@@ -20,6 +20,8 @@ export function normTrack(t) {
     album: album ? { id: album.id, title: album.title, year: album.year || null } : null,
     cover: coverUrl(t.coverUri || album?.coverUri, 200),
     durationMs: t.durationMs || 0,
+    // podcast episodes and audiobook chapters resume from the saved position wherever they are played from
+    ...(t.rememberPosition === true ? { kind: t.type || null, rememberPosition: true } : {}),
     explicit: t.contentWarning === "explicit",
     clean: t.contentWarning === "clean",
     available: t.available !== false,

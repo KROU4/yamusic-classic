@@ -8,6 +8,7 @@ import { toast } from "../lib/toast.js";
 import { nowPlayingOpen } from "../lib/ui.js";
 import { canReplace, overrides, replaceWithFile, restoreYandexAudio } from "../lib/overrides.js";
 import * as player from "../player/engine.js";
+import { EpisodeMenuItems } from "./Episodes.jsx";
 
 /** { x, y, track, playlist?: { kind, index, onRemoved } } */
 export const menu = signal(null);
@@ -198,6 +199,7 @@ function MenuBody({ m }) {
       <button class="menu-item" role="menuitem" onClick={act(() => player.dislike(t))}>
         <Icon name="ban" size={16} /> {player.isDisliked(t) ? "Снова предлагать" : "Не нравится"}
       </button>
+      <EpisodeMenuItems track={t} act={act} />
       <div class="menu-sep" />
       {t.albumId && (
         <button class="menu-item" role="menuitem" onClick={act(() => goTo(`/album/${t.albumId}`))}>

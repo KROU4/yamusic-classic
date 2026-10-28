@@ -13,6 +13,7 @@ const NAV = [
   ["chart", "/chart", "trend", "Чарт"],
   ["new", "/new", "sparkle", "Новинки"],
   ["radio", "/radio", "radio", "Радио"],
+  ["podcasts", "/podcasts", "mic", "Подкасты и книги"],
   ["collection", "/collection", "library", "Коллекция"],
   ["stats", "/stats", "stats", "Статистика"],
 ];
