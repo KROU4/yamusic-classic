@@ -252,6 +252,9 @@ function createWindow(url, key) {
       backgroundThrottling: false, // player timers must not fall asleep in a minimized window
     },
   });
+  // smoke runs play real tracks but must stay silent (they run while the user is using the computer);
+  // muting the page keeps the whole audio path working, analyser and EQ included. YMC_SHOTS_SOUND=1 to listen
+  if (process.env.YMC_SHOTS && process.env.YMC_SHOTS_SOUND !== "1") win.webContents.setAudioMuted(true);
   // maximize() on a hidden window shows it immediately, so maximize only in ready-to-show
   const startMaximized = !!b.maximized;
 
