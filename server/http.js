@@ -54,6 +54,7 @@ export function buildRoutes(svc) {
     ["POST", /^\/api\/play\/resolve$/, (q, m, b) => svc.resolvePlay(b.track)],
     ["POST", /^\/api\/played$/, (q, m, b) => svc.played(b)],
     ["POST", /^\/api\/lyrics$/, (q, m, b) => svc.lyrics(b.track)],
+    ["POST", /^\/api\/lyrics\/translate$/, (q, m, b) => svc.lyricsTranslate(b)],
     ["POST", /^\/api\/like$/, (q, m, b) => svc.setLike(String(b.trackId), !!b.liked)],
     ["POST", /^\/api\/dislike$/, (q, m, b) => svc.setDislike(String(b.trackId), !!b.disliked)],
     ["GET", /^\/api\/wave$/, () => svc.waveMeta()],

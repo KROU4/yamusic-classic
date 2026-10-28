@@ -6,6 +6,7 @@ import { api } from "../lib/api.js";
 import { artistNames, duration } from "../lib/format.js";
 import * as p from "../player/engine.js";
 import { openTrackMenu } from "./ContextMenu.jsx";
+import { KaraokeLine, LyricsTools, useLyricsTranslation } from "./LyricsExtras.jsx";
 
 const SOURCE_NAMES = { yandex: "Яндекс Музыка", lrclib: "LRCLIB" };
 
@@ -29,6 +30,7 @@ export function Lyrics() {
   }, [t?.id]);
 
   const data = state.data;
+  const tr = useLyricsTranslation(t?.id, state.status === "ok" ? data : null);
   const pos = p.position.value;
   let active = -1;
   if (data?.synced) {
@@ -45,35 +47,54 @@ export function Lyrics() {
   }, [active]);
 
   if (!t) return <div class="panel-empty">Ничего не играет</div>;
+  const trOn = tr.on && tr.status === "ok";
   return (
-    <div class="lyrics" ref={box} onWheel={() => (userScrolled.current = Date.now())}>
-      <div class="lyrics-head">
-        <div class="lyrics-title">{t.title}</div>
-        <div class="lyrics-artist">{artistNames(t)}</div>
-      </div>
-      {state.status === "loading" && <div class="panel-empty"><span class="spinner" /></div>}
-      {state.status === "empty" && <div class="panel-empty">Текста для этой песни пока нет ни у Яндекса, ни в LRCLIB</div>}
-      {state.status === "error" && <div class="panel-empty">Не удалось загрузить текст: {state.error}</div>}
-      {state.status === "ok" &&
-        (data.synced ? (
-          <div class="lyrics-lines">
-            {data.lines.map((l, i) => (
-              <button key={i} data-i={i} class={`lyric ${l.text ? "" : "gap"} ${i === active ? "on" : i < active ? "past" : ""}`} onClick={() => p.seek(l.t)}>
-                {l.text || "♪"}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <pre class="lyrics-plain">{data.plain}</pre>
-        ))}
-      {state.status === "ok" && (
-        <div class="lyrics-source">
-          Источник: {SOURCE_NAMES[data.source] || data.source}
-          {data.replacedCensored && " — текст Яндекса был с цензурой, показан полный"}
-          {data.censored && " — в тексте есть цензура"}
+    <>
+      <LyricsTools tr={tr} />
+      <div class="lyrics" ref={box} onWheel={() => (userScrolled.current = Date.now())}>
+        <div class="lyrics-head">
+          <div class="lyrics-title">{t.title}</div>
+          <div class="lyrics-artist">{artistNames(t)}</div>
         </div>
-      )}
-    </div>
+        {state.status === "loading" && <div class="panel-empty"><span class="spinner" /></div>}
+        {state.status === "empty" && <div class="panel-empty">Текста для этой песни пока нет ни у Яндекса, ни в LRCLIB</div>}
+        {state.status === "error" && <div class="panel-empty">Не удалось загрузить текст: {state.error}</div>}
+        {state.status === "ok" &&
+          (data.synced ? (
+            <div class="lyrics-lines">
+              {data.lines.map((l, i) => {
+                const line = tr.of(l.text);
+                return (
+                  <button key={i} data-i={i} class={`lyric ${l.text ? "" : "gap"} ${i === active ? "on" : i < active ? "past" : ""}`} onClick={() => p.seek(l.t)}>
+                    {i === active && l.words ? <KaraokeLine words={l.words} /> : l.text || "♪"}
+                    {line && <span class="lyric-tr">{line}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ) : trOn ? (
+            <div class="lyrics-plain">
+              {data.plain.split("\n").map((s, i) => (
+                <div key={i}>
+                  {s || " "}
+                  {tr.of(s) && <span class="lyric-tr">{tr.of(s)}</span>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <pre class="lyrics-plain">{data.plain}</pre>
+          ))}
+        {state.status === "ok" && (
+          <div class="lyrics-source">
+            Источник: {SOURCE_NAMES[data.source] || data.source}
+            {data.replacedCensored && " — текст Яндекса был с цензурой, показан полный"}
+            {data.censored && " — в тексте есть цензура"}
+            {data.wordSync && ` · пословная синхронизация${data.wordSource ? ` из ${SOURCE_NAMES[data.wordSource] || data.wordSource}` : ""}`}
+            {trOn && " · перевод машинный (Google Переводчик)"}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
 

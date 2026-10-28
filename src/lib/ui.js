@@ -34,3 +34,6 @@ export const sidebarCollapsed = persisted("ymc-sidebar-collapsed", false);
 
 /** Home tab: «Для вас» or «Тренды». */
 export const homeTab = persisted("ymc-home-tab", "foryou");
+
+/** Lyrics: show a (machine) translation under each line. */
+export const lyricsTranslate = persisted("ymc-lyrics-translate", false);
