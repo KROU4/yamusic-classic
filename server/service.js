@@ -28,8 +28,6 @@ export const DEFAULT_PREFS = {
   autostart: false,
   startMinimized: false,
   globalHotkeys: false,
-  discordRpc: false,
-  discordAppId: "",
 };
 
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
@@ -76,7 +74,7 @@ export class Service {
     return next;
   }
 
-  /** Подписка на изменение настроек (Electron применяет автозапуск, хоткеи, Discord). */
+  /** Подписка на изменение настроек (Electron применяет автозапуск, хоткеи). */
   onPrefs(fn) {
     this.prefListeners.push(fn);
   }

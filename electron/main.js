@@ -1,6 +1,6 @@
 // Оболочка Electron: поднимает локальный бэкенд и открывает окно с интерфейсом.
 // Плюс интеграция с Windows: кнопки на миниатюре в панели задач, трей, мини-плеер,
-// автозапуск, глобальные горячие клавиши, статус в Discord.
+// автозапуск, глобальные горячие клавиши.
 import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session, ipcMain, globalShortcut, dialog } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import { Service } from "../server/service.js";
 import { createServer } from "../server/http.js";
 import { renderPng, SHAPES } from "./png.js";
-import { DiscordPresence, activityFromState } from "./discord.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const t0 = Date.now();
@@ -35,7 +34,6 @@ let miniMode = false;
 let pendingMaximize = false; // окно стартовало в трее, а развернуть его надо при первом показе
 let normalBounds = null; // размер окна до перехода в мини-плеер
 let playerState = { playing: false };
-const discord = new DiscordPresence({ log });
 
 const MINI_SIZE = { width: 360, height: 600 };
 const FULL_MIN = { width: 980, height: 620 };
@@ -189,17 +187,6 @@ function applyHotkeys(enabled) {
   }
 }
 
-// ---------- Discord ----------
-function updateDiscord() {
-  const p = prefs();
-  if (!p.discordRpc || !/^\d{15,22}$/.test(p.discordAppId || "")) {
-    discord.disconnect();
-    return;
-  }
-  discord.connect(p.discordAppId).catch(() => {});
-  discord.setActivity(playerState.playing ? activityFromState(playerState) : null);
-}
-
 // ---------- настройки оболочки ----------
 function applyPrefs(p) {
   // автозапуск регистрируем только у собранного приложения, иначе в автозагрузку попал бы electron.exe разработчика
@@ -210,7 +197,6 @@ function applyPrefs(p) {
     app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"], ...(exe ? { path: exe } : {}) });
   }
   applyHotkeys(!!p.globalHotkeys);
-  updateDiscord();
 }
 
 /** Состояние из renderer приводим к строгой форме: строки обрезаны, ссылки только https, числа — числа. */
@@ -236,7 +222,6 @@ ipcMain.on("ymc:state", (e, state) => {
   playerState = sanitizeState(state);
   updateThumbar();
   updateTray();
-  updateDiscord();
 });
 
 ipcMain.on("ymc:mini", (e, on) => {
@@ -393,7 +378,6 @@ app.on("before-quit", () => {
 // will-quit наступает после закрытия окон — к этому моменту финальное прослушивание уже записано
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  discord.disconnect();
   backend?.svc.store.saveNow();
 });
 

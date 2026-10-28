@@ -200,28 +200,6 @@ export function SettingsPage({ me, onReconnect }) {
             checked={prefs.globalHotkeys}
             onChange={(v) => save({ globalHotkeys: v })}
           />
-          <Toggle
-            label="Статус в Discord"
-            hint="Показывать в профиле Discord, что сейчас играет. Нужен Application ID своего приложения с discord.com/developers (бесплатно, 1 минута)"
-            checked={prefs.discordRpc}
-            onChange={(v) => save({ discordRpc: v })}
-          />
-          {prefs.discordRpc && (
-            <div class="setting">
-              <span class="setting-text">
-                <span class="setting-label">Discord Application ID</span>
-                <span class="setting-hint">Название приложения в Discord станет заголовком статуса, например «YM Classic»</span>
-              </span>
-              <input
-                class="text-input"
-                inputMode="numeric"
-                placeholder="123456789012345678"
-                value={prefs.discordAppId}
-                onChange={(e) => save({ discordAppId: e.currentTarget.value.replace(/\D/g, "") })}
-                aria-label="Discord Application ID"
-              />
-            </div>
-          )}
         </section>
       )}
 

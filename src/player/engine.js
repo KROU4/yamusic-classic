@@ -42,7 +42,7 @@ export const authError = signal(false);
 export const audioConfig = signal({ crossfade: LS.get("ymc-crossfade", 0), normalize: LS.get("ymc-normalize", false) });
 // Таймер сна: null | { mode: "time", at } | { mode: "track" }
 export const sleepTimer = signal(null);
-// Счётчик перемоток: оболочка (Discord, трей) переотправляет состояние после seek
+// Счётчик перемоток: оболочка (трей, панель задач) переотправляет состояние после seek
 export const seekGen = signal(0);
 
 // Лайки, поставленные в этой сессии, поверх значений из ответов API
@@ -456,7 +456,7 @@ export function toggle() {
 
 export function seek(sec) {
   if (!Number.isFinite(sec)) return;
-  // перемотка во время загрузки другого трека задела бы старый поток и отправила бы его позицию в Discord
+  // перемотка во время загрузки другого трека задела бы старый поток и отправила бы его позицию в оболочку
   if (!elementIsCurrent()) return;
   cancelFade();
   if (session) session.lastPos = sec;
