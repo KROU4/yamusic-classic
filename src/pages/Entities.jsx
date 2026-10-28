@@ -104,7 +104,7 @@ export function ArtistPage({ id }) {
       >
         <div class="page-meta">
           {artist.genres?.join(", ")}
-          {artist.likes ? ` · ${plural(artist.likes, "слушатель отметил", "слушателя отметили", "слушателей отметили")}` : ""}
+          {artist.likes ? ` · в «Мне нравится» у ${artist.likes.toLocaleString("ru-RU")}` : ""}
         </div>
       </PageHead>
       <Section title="Популярные треки">

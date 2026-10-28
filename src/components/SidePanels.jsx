@@ -57,7 +57,7 @@ function Lyrics() {
         (data.synced ? (
           <div class="lyrics-lines">
             {data.lines.map((l, i) => (
-              <button key={i} data-i={i} class={`lyric ${i === active ? "on" : i < active ? "past" : ""}`} onClick={() => p.seek(l.t)}>
+              <button key={i} data-i={i} class={`lyric ${l.text ? "" : "gap"} ${i === active ? "on" : i < active ? "past" : ""}`} onClick={() => p.seek(l.t)}>
                 {l.text || "♪"}
               </button>
             ))}

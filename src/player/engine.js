@@ -212,6 +212,8 @@ export function playAt(i) {
 
 export function toggle() {
   if (!current.value) return;
+  // после перезапуска приложения волна продолжается новой сессией, а не одним сохранённым треком
+  if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
   if (!audio.src) return load(index.value);
   if (audio.paused) audio.play().catch(() => {});
   else audio.pause();

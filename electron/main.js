@@ -104,22 +104,39 @@ function createWindow(url, key) {
   win.once("ready-to-show", () => {
     win.show();
     log(`окно показано через ${Date.now() - t0} мс после старта`);
-    // smoke-режим: YMC_SCREENSHOT=путь.png — снимок окна после загрузки данных и выход
-    if (process.env.YMC_SCREENSHOT) {
-      setTimeout(async () => {
-        const img = await win.webContents.capturePage();
-        fs.writeFileSync(process.env.YMC_SCREENSHOT, img.toPNG());
-        log("скриншот сохранён:", process.env.YMC_SCREENSHOT);
-        quitting = true;
-        app.quit();
-      }, Number(process.env.YMC_SCREENSHOT_DELAY || 4000));
-    }
+    if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
   win.on("close", saveBounds);
   win.on("closed", () => {
     win = null;
   });
   win.loadURL(`${url}#k=${key}`);
+}
+
+// Smoke-режим для визуальной проверки: YMC_SHOTS=путь к JSON [{ hash?, js?, wait?, file }].
+// Шаги выполняются по очереди в настоящем окне, после каждого с file — снимок окна.
+async function runShots(specFile) {
+  const steps = JSON.parse(fs.readFileSync(specFile, "utf8"));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  await sleep(3000);
+  for (const step of steps) {
+    try {
+      if (step.hash) await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
+      if (step.js) {
+        const out = await win.webContents.executeJavaScript(`(async () => { ${step.js} })()`);
+        if (out !== undefined) log("js:", JSON.stringify(out));
+      }
+      await sleep(step.wait ?? 1500);
+      if (step.file) {
+        fs.writeFileSync(step.file, (await win.webContents.capturePage()).toPNG());
+        log("снимок:", path.basename(step.file));
+      }
+    } catch (e) {
+      log("шаг упал:", e.message);
+    }
+  }
+  quitting = true;
+  app.quit();
 }
 
 function control(js) {

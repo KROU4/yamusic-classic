@@ -26,7 +26,10 @@ export function SearchPage({ q }) {
       {best?.item && (
         <Section title="Лучший результат">
           <div class="best">
-            {best.type === "track" && <TrackList tracks={[best.item]} ctx={ctx} />}
+            {best.type === "track" && (
+              // лучший трек играет вместе с остальными результатами, а не в одиночку
+              <TrackList tracks={[best.item, ...data.tracks.filter((t) => t.id !== best.item.id)]} ctx={ctx} limit={1} />
+            )}
             {best.type === "album" && <Row><AlbumCard album={best.item} /></Row>}
             {best.type === "artist" && <Row><ArtistCard artist={best.item} /></Row>}
             {best.type === "playlist" && <Row><PlaylistCard playlist={best.item} /></Row>}

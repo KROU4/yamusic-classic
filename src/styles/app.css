@@ -99,14 +99,17 @@ h3 {
 .layout {
   height: 100%;
   display: grid;
-  grid-template-rows: var(--header-h) 1fr var(--player-h);
+  grid-template-rows: var(--header-h) minmax(0, 1fr) var(--player-h);
+  grid-template-columns: minmax(0, 1fr);
 }
 .body {
   display: flex;
   min-height: 0;
+  min-width: 0;
 }
 .main {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-gutter: stable;
@@ -559,7 +562,7 @@ h3 {
   position: absolute;
   top: calc(100% + 10px);
   right: 16px;
-  width: 440px;
+  width: 520px;
   padding: 20px 22px;
   border-radius: var(--radius-lg);
   background: var(--bg-elev);
@@ -760,8 +763,12 @@ h3 {
   opacity: 0;
   transition: opacity 0.12s;
 }
+/* строки без обложки (альбом): кнопка встаёт на место номера, не сдвигая название */
+.track:not(:has(.track-cover)) .track-lead {
+  min-width: 26px;
+}
 .track:not(:has(.track-cover)) .track-play {
-  position: static;
+  right: -4px;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -775,7 +782,7 @@ h3 {
 }
 .track:not(:has(.track-cover)):hover .num,
 .track:not(:has(.track-cover)).is-current .num {
-  display: none;
+  visibility: hidden;
 }
 .track-main {
   min-width: 0;
@@ -1195,6 +1202,10 @@ h3 {
   color: var(--text-3);
   transition: color 0.25s, transform 0.25s var(--ease);
   transform-origin: left center;
+}
+.lyric.gap {
+  font-size: 15px;
+  padding: 0 6px;
 }
 .lyric.past {
   color: var(--text-2);

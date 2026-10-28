@@ -70,6 +70,14 @@ function TrackRow({ track, i, list, ctx, showCover, numbered, chart }) {
         <button class={`icon-btn like ${liked ? "on" : ""}`} onClick={() => player.like(track)} aria-label={liked ? "Убрать из «Мне нравится»" : "Мне нравится"}>
           <Icon name={liked ? "heart" : "heartOutline"} size={18} />
         </button>
+        <button
+          class="icon-btn hover-only"
+          onClick={() => player.playWave({ stationId: `track:${track.id}`, title: `Волна по треку «${track.title}»` })}
+          aria-label="Моя волна по треку"
+          title="Моя волна по треку"
+        >
+          <Icon name="wave" size={18} />
+        </button>
         <button class="icon-btn hover-only" onClick={() => player.enqueueNext([track])} aria-label="Играть следующим" title="Играть следующим">
           <Icon name="addQueue" size={18} />
         </button>
