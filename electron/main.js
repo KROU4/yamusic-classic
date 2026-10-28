@@ -46,7 +46,8 @@ let normalBounds = null; // window size before switching to the mini player
 let playerState = { playing: false };
 
 const MINI_SIZE = { width: 360, height: 600 };
-const FULL_MIN = { width: 980, height: 620 };
+// small enough for Windows snap layouts on 1080p: halves (960×1032), quarters (960×516), thirds (640×1032)
+const FULL_MIN = { width: 560, height: 440 };
 
 function loadBounds() {
   try {
@@ -366,7 +367,7 @@ function createWindow(url, key) {
   win.loadURL(`${url}#k=${key}`);
 }
 
-// Smoke mode for visual checks: YMC_SHOTS=path to JSON [{ window?: "minimize"|"restore", hash?, js?, wait?, file? }].
+// Smoke mode for visual checks: YMC_SHOTS=path to JSON [{ window?: "minimize"|"restore", size?: [w, h], hash?, js?, wait?, file? }].
 // Steps run in order in a real window, a window screenshot after each one with file.
 async function runShots(specFile) {
   const steps = JSON.parse(fs.readFileSync(specFile, "utf8"));
@@ -377,6 +378,13 @@ async function runShots(specFile) {
       // order: window action -> navigate -> wait for page load -> check; without navigation: action -> wait for the result
       if (step.window === "minimize") win.minimize();
       if (step.window === "restore") win.restore();
+      // "size": [width, height] in DIP, placed at the work area's top-left like a snapped window
+      if (Array.isArray(step.size)) {
+        if (win.isMaximized()) win.unmaximize();
+        const area = screen.getDisplayMatching(win.getBounds()).workArea;
+        win.setBounds({ x: area.x, y: area.y, width: step.size[0], height: step.size[1] });
+        await sleep(600);
+      }
       if (step.hash) {
         await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
         await sleep(step.wait ?? 1500);

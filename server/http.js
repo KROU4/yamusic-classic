@@ -74,6 +74,7 @@ export function buildRoutes(svc) {
     ["POST", /^\/api\/my\/playlists\/(\d+)\/remove$/, (q, m, b) => svc.removeFromPlaylist(m[1], b.track, b.index)],
     ["POST", /^\/api\/my\/playlists\/(\d+)\/rename$/, (q, m, b) => svc.renamePlaylist(m[1], b.title)],
     ["POST", /^\/api\/my\/playlists\/(\d+)\/delete$/, (q, m) => svc.deletePlaylist(m[1])],
+    ["GET", /^\/api\/vibe\/assets$/, () => svc.vibeAssets()],
     ["GET", /^\/api\/overrides$/, () => svc.listOverrides()],
     ["POST", /^\/api\/overrides$/, (q, m, b) => svc.setOverride(String(b.trackId), b.path)],
     ["POST", /^\/api\/overrides\/remove$/, (q, m, b) => svc.removeOverride(String(b.trackId))],

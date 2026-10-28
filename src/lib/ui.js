@@ -26,8 +26,10 @@ export const nowPlayingOpen = signal(false);
 /** Whether the keyboard shortcuts help is open. */
 export const shortcutsOpen = signal(false);
 
-/** My Wave animation: full — shader reacting to music; lite — light CSS animation; off — static background. */
-export const vibeMode = persisted("ymc-vibe-mode", "full");
+/** My Wave animation: official — the official app's orb (when installed); shader — own WebGL orb; lite — CSS; off — static. */
+export const vibeMode = persisted("ymc-vibe-mode", "official");
+// earlier builds stored "full" for the own shader; the official orb is the new default for everyone
+if (vibeMode.peek() === "full") vibeMode.value = "official";
 
 /** Collapsed sidebar (icons only). */
 export const sidebarCollapsed = persisted("ymc-sidebar-collapsed", false);

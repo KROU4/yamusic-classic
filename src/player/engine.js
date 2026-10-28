@@ -624,7 +624,7 @@ export function setSleepTimer(minutes) {
     toast("Остановлю после этого трека");
     return;
   }
-  sleepTimer.value = { mode: "time", at: Date.now() + minutes * 60000 };
+  sleepTimer.value = { mode: "time", at: Date.now() + minutes * 60000, minutes };
   toast(`Остановлю через ${minutes} мин`);
   sleepInterval = setInterval(() => {
     const st = sleepTimer.value;

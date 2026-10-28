@@ -5,6 +5,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { vibeMode } from "../lib/ui.js";
 import { windowVisible } from "../lib/desktop.js";
+import { theme } from "../lib/theme.js";
+import { api } from "../lib/api.js";
 import * as graph from "../player/audiograph.js";
 import * as p from "../player/engine.js";
 
@@ -254,22 +256,154 @@ function startGl(canvas, getState) {
 
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
+// ---------- the official orb (looped video from the installed official app) ----------
+
+// The official loop is warm (yellow core, red body, magenta fringe). Moods and activities are shown by
+// rotating its hue, which keeps the original's light and motion while matching the wave's colours.
+const HUE = {
+  default: 0,
+  active: -10,
+  fun: 85,
+  calm: 195,
+  sad: 245,
+  "wake-up": 15,
+  workout: -12,
+  "road-trip": 165,
+  "work-background": 150,
+  "study-background": 140,
+  party: 285,
+  "fall-asleep": 225,
+};
+const hueFor = (colors) => HUE[Object.keys(PALETTES).find((k) => PALETTES[k] === colors) || "default"] || 0;
+
+let assetsP = null;
+/** Official loop links from the backend; null when the official app isn't installed (then the own shader runs). */
+function officialAssets() {
+  assetsP ||= api
+    .get("/vibe/assets")
+    .then((a) => (a?.available ? a : null))
+    .catch(() => null);
+  return assetsP;
+}
+
+function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
+  const box = useRef(null);
+  const video = useRef(null);
+  const state = useRef({});
+  const light = theme.value === "light" || (theme.value === "system" && window.matchMedia("(prefers-color-scheme: light)").matches);
+  state.current = { playing: !!active && p.playing.value, pulseAt, paused };
+
+  useEffect(() => {
+    const el = box.current;
+    const v = video.current;
+    if (!el || !v) return;
+    let raf = 0;
+    let visible = true;
+    let last = performance.now();
+    const sm = { bass: 0, energy: 0, pulse: 0, rate: 1 };
+    const canRun = () => visible && !document.hidden && !state.current.paused && windowVisible.peek();
+    const frame = (now) => {
+      raf = 0;
+      if (!canRun()) return;
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const st = state.current;
+      const lv = st.playing ? graph.levels() : null;
+      const target = lv || { bass: st.playing ? 0.18 + 0.06 * Math.sin(now / 430) : 0, energy: st.playing ? 0.3 : 0 };
+      sm.bass += (target.bass - sm.bass) * (1 - Math.exp(-dt * 10));
+      sm.energy += (target.energy - sm.energy) * (1 - Math.exp(-dt * 5));
+      if (st.pulseAt && st.pulseAt !== sm.pulseAt) {
+        sm.pulseAt = st.pulseAt;
+        sm.pulse = 1;
+      }
+      sm.pulse = Math.max(0, sm.pulse - dt * 1.4);
+      // the orb breathes with the bass and flares on a like; the loop itself runs calmer while paused
+      el.style.setProperty("--vibe-scale", (1 + sm.bass * 0.09 + sm.pulse * 0.08).toFixed(4));
+      el.style.setProperty("--vibe-glow", (1 + sm.energy * 0.22 + sm.pulse * 0.25).toFixed(3));
+      const rate = st.playing ? 1 + Math.round(sm.energy * 4) / 10 : 0.55;
+      if (Math.abs(rate - sm.rate) > 0.05) v.playbackRate = sm.rate = rate;
+      raf = requestAnimationFrame(frame);
+    };
+    const kick = () => {
+      const run = canRun();
+      if (run && v.paused) v.play().catch(() => {});
+      if (!run && !v.paused) v.pause();
+      if (run && !raf) {
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      }
+    };
+    const io = new IntersectionObserver((entries) => {
+      visible = entries[entries.length - 1].isIntersecting;
+      kick();
+    });
+    io.observe(el);
+    document.addEventListener("visibilitychange", kick);
+    const unsub = windowVisible.subscribe(kick);
+    state.current.kick = kick;
+    kick();
+    return () => {
+      cancelAnimationFrame(raf);
+      io.disconnect();
+      unsub();
+      document.removeEventListener("visibilitychange", kick);
+      v.pause();
+    };
+  }, []);
+
+  useEffect(() => {
+    state.current.kick?.();
+  }, [paused]);
+
+  return (
+    <div class={`vibe-canvas vibe-official ${active && p.playing.value ? "is-playing" : ""}`} ref={box} style={{ "--vibe-hue": `${hueFor(colors)}deg` }} aria-hidden="true">
+      <video
+        ref={video}
+        key={light ? "light" : "dark"}
+        src={light ? assets.light : assets.dark}
+        poster={light ? assets.lightPoster : assets.darkPoster}
+        muted
+        loop
+        playsinline
+        disablepictureinpicture
+        preload="auto"
+      />
+    </div>
+  );
+}
+
 /**
- * colors — a three-color palette; active — the wave is playing now (the animation reacts to sound).
+ * colors — the mood palette; active — the wave is playing now (the animation reacts to sound).
  * pulseAt — timestamp of an event (like) that the animation answers with a flash.
  * paused — the owner is covered (e.g. by Now Playing): stop rendering until it is visible again.
+ * Modes: official (the official app's own orb, when installed) → shader (own WebGL orb) → lite → off.
  */
-export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
+export function VibeCanvas(props) {
+  const [assets, setAssets] = useState(undefined);
+  const want = reducedMotion.matches && vibeMode.value !== "off" ? "lite" : vibeMode.value;
+  useEffect(() => {
+    if (want !== "official") return;
+    let on = true;
+    officialAssets().then((a) => on && setAssets(a));
+    return () => (on = false);
+  }, [want]);
+  if (want === "official") {
+    if (assets === undefined) return <div class="vibe-canvas" aria-hidden="true" />;
+    if (assets) return <OfficialVibe assets={assets} {...props} />;
+  }
+  return <ShaderVibe {...props} mode={want === "official" ? "shader" : want} />;
+}
+
+function ShaderVibe({ colors, active, pulseAt, paused = false, mode }) {
   const ref = useRef(null);
   const state = useRef({});
   const ctrl = useRef(null);
   // per instance: another canvas failing must not swap this one to lite under a live render loop
   const [broken, setBroken] = useState(glBroken);
-  const mode = reducedMotion.matches && vibeMode.value === "full" ? "lite" : vibeMode.value;
   state.current = { colors, playing: !!active && p.playing.value, pulseAt, paused };
 
   useEffect(() => {
-    if (mode !== "full" || broken || !ref.current) return;
+    if (mode !== "shader" || broken || !ref.current) return;
     try {
       const c = startGl(ref.current, () => state.current);
       if (c) {
@@ -292,7 +426,7 @@ export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
   }, [paused]);
 
   const style = { "--c0": colors[0], "--c1": colors[1], "--c2": colors[2], "--c3": colors[3] || colors[2] };
-  if (mode === "full" && !broken)
+  if (mode === "shader" && !broken)
     return (
       <div class={`vibe-canvas ${active && p.playing.value ? "is-playing" : ""}`} style={style} aria-hidden="true">
         <canvas ref={ref} />

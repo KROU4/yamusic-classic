@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import { YandexMusic, ApiError, CODECS } from "./yandex.js";
 import { MediaRegistry, audioMime } from "./media.js";
+import { officialVibeFiles } from "./official.js";
 import { resolveSession } from "./token.js";
 import { JsonStore, PlayHistory } from "./store.js";
 import { normTrack, normAlbum, normArtist, normPlaylist, normStation, coverUrl } from "./normalize.js";
@@ -50,6 +51,7 @@ export class Service {
   constructor({ dataDir, fetchImpl = globalThis.fetch, log = () => {} }) {
     this.fetch = fetchImpl;
     this.log = log;
+    this.dataDir = dataDir;
     this.store = new JsonStore(path.join(dataDir, "state.json"), { prefs: DEFAULT_PREFS });
     this.history = new PlayHistory(this.store);
     this.playlog = new PlayLog(this.store);
@@ -367,6 +369,21 @@ export class Service {
     }
     const { key, ...open } = await this.api.fileInfo(trackId, quality === "lq" ? "lq" : "nq");
     return open;
+  }
+
+  /** The official My Wave orb loops from the installed official app, as one-off media links (or available:false). */
+  vibeAssets() {
+    this.officialVibe ??= officialVibeFiles(path.join(this.dataDir, "official-media")) || false;
+    const f = this.officialVibe;
+    if (!f) return { available: false };
+    const link = (file, mime) => this.media.register({ kind: "file", path: file, mime });
+    return {
+      available: true,
+      dark: link(f.dark, "video/mp4"),
+      light: link(f.light, "video/mp4"),
+      darkPoster: link(f.darkPoster, "image/jpeg"),
+      lightPoster: link(f.lightPoster, "image/jpeg"),
+    };
   }
 
   // ---------- local replacement files ----------
