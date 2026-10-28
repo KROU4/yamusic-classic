@@ -30,6 +30,8 @@ export function normTrack(t) {
     // Яндекс подменяет трек «чистой» или региональной версией, а оригинал кладёт сюда
     substituted: t.substituted ? normTrack(t.substituted) : null,
     color: t.derivedColors?.accent || null,
+    // интегральная громкость (LUFS) — для выравнивания громкости между треками
+    loudness: typeof t.r128?.i === "number" ? t.r128.i : null,
   };
 }
 

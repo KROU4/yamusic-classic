@@ -132,6 +132,19 @@ export class YandexMusic {
   userPlaylists(uid) {
     return this.get(`/users/${uid}/playlists/list`);
   }
+  createPlaylist(uid, title, visibility = "private") {
+    return this.post(`/users/${uid}/playlists/create`, { form: { title, visibility } });
+  }
+  /** Изменение состава плейлиста: diff — массив операций insert/delete, revision — текущая ревизия. */
+  changePlaylist(uid, kind, revision, diff) {
+    return this.post(`/users/${uid}/playlists/${kind}/change-relative`, { form: { diff: JSON.stringify(diff), revision: String(revision) } });
+  }
+  renamePlaylist(uid, kind, value) {
+    return this.post(`/users/${uid}/playlists/${kind}/name`, { form: { value } });
+  }
+  deletePlaylist(uid, kind) {
+    return this.post(`/users/${uid}/playlists/${kind}/delete`);
+  }
   search(text, type = "all", page = 0) {
     return this.get("/search", { query: { text, type, page, nocorrect: "false" } });
   }

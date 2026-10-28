@@ -58,6 +58,14 @@ export function buildRoutes(svc) {
     ["GET", /^\/api\/prefs$/, () => svc.prefs],
     ["POST", /^\/api\/prefs$/, (q, m, b) => svc.setPrefs(b)],
     ["POST", /^\/api\/history\/clear$/, () => (svc.history.clear(), { ok: true })],
+    ["GET", /^\/api\/stats$/, (q) => svc.stats(Math.min(365, Math.max(1, Number(q.get("days") || 7))), Number(q.get("tz") || 0))],
+    ["POST", /^\/api\/stats\/clear$/, () => (svc.playlog.clear(), { ok: true })],
+    ["GET", /^\/api\/my\/playlists$/, () => svc.myPlaylists()],
+    ["POST", /^\/api\/my\/playlists$/, (q, m, b) => svc.createPlaylist(b.title, b.tracks || [])],
+    ["POST", /^\/api\/my\/playlists\/(\d+)\/add$/, (q, m, b) => svc.addToPlaylist(m[1], b.tracks || [])],
+    ["POST", /^\/api\/my\/playlists\/(\d+)\/remove$/, (q, m, b) => svc.removeFromPlaylist(m[1], b.track, b.index)],
+    ["POST", /^\/api\/my\/playlists\/(\d+)\/rename$/, (q, m, b) => svc.renamePlaylist(m[1], b.title)],
+    ["POST", /^\/api\/my\/playlists\/(\d+)\/delete$/, (q, m) => svc.deletePlaylist(m[1])],
   ];
 }
 

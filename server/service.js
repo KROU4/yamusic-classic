@@ -9,6 +9,7 @@ import { DEFAULT_CURATION, songKey } from "./curate.js";
 import { WaveManager, WAVE_SETTINGS } from "./wave.js";
 import { Uncensor } from "./uncensor.js";
 import { getLyrics } from "./lyrics.js";
+import { PlayLog, computeStats } from "./stats.js";
 
 export const DEFAULT_PREFS = {
   allowExplicit: true, // не просить у волны «чистую» выдачу
@@ -20,7 +21,15 @@ export const DEFAULT_PREFS = {
   wave: { diversity: "default", moodEnergy: "all", language: "any" },
   theme: "dark",
   volume: 0.8,
-  crossfade: 0,
+  crossfade: 0, // секунды наложения треков, 0 — выключено
+  normalize: false, // выравнивание громкости по R128
+  // оболочка Windows
+  closeToTray: false,
+  autostart: false,
+  startMinimized: false,
+  globalHotkeys: false,
+  discordRpc: false,
+  discordAppId: "",
 };
 
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
@@ -31,6 +40,8 @@ export class Service {
     this.log = log;
     this.store = new JsonStore(path.join(dataDir, "state.json"), { prefs: DEFAULT_PREFS });
     this.history = new PlayHistory(this.store);
+    this.playlog = new PlayLog(this.store);
+    this.prefListeners = [];
     this.api = new YandexMusic({ fetchImpl });
     this.account = null;
     this.sessionSource = null;
@@ -60,7 +71,13 @@ export class Service {
       wave: { ...cur.wave, ...(patch.wave || {}) },
     };
     this.store.set("prefs", next);
+    for (const fn of this.prefListeners) fn(next, patch);
     return next;
+  }
+
+  /** Подписка на изменение настроек (Electron применяет автозапуск, хоткеи, Discord). */
+  onPrefs(fn) {
+    this.prefListeners.push(fn);
   }
 
   // ---------- сессия ----------
@@ -331,7 +348,10 @@ export class Service {
   async played({ track, from, playedSeconds, durationSeconds, playId }) {
     this.requireAuth();
     // в историю анти-повтора попадает и пропущенное: раз трек промотали, слышать его снова скоро не хочется
-    if (playedSeconds >= 3) this.history.record(track, songKey(track));
+    if (playedSeconds >= 3) {
+      this.history.record(track, songKey(track));
+      this.playlog.add(track, playedSeconds);
+    }
     await this.api
       .playAudio({
         trackId: track.id,
@@ -369,5 +389,65 @@ export class Service {
 
   waveMeta() {
     return { options: WAVE_SETTINGS, current: this.prefs.wave, info: this.wave.info() };
+  }
+
+  // ---------- статистика ----------
+  stats(days = 7, tzOffsetMin = 0) {
+    return computeStats(this.playlog.entries, { days, tzOffsetMin });
+  }
+
+  // ---------- свои плейлисты ----------
+  async myPlaylists() {
+    this.requireAuth();
+    const list = await this.api.userPlaylists(this.api.uid);
+    return { playlists: (list || []).map(normPlaylist) };
+  }
+
+  async createPlaylist(title, tracks = []) {
+    this.requireAuth();
+    const name = String(title || "").trim().slice(0, 100) || "Новый плейлист";
+    const pl = await this.api.createPlaylist(this.api.uid, name);
+    if (tracks.length) await this.addToPlaylist(pl.kind, tracks);
+    this.cache.delete("home");
+    return { playlist: normPlaylist(pl) };
+  }
+
+  async addToPlaylist(kind, tracks) {
+    this.requireAuth();
+    const pl = await this.api.playlist(this.api.uid, kind);
+    const items = tracks.filter((t) => t?.id).map((t) => ({ id: String(t.id), albumId: t.albumId ? String(t.albumId) : undefined }));
+    if (!items.length) throw new ApiError("Нечего добавлять", 400);
+    // новые треки в конец плейлиста, как в классическом клиенте
+    const diff = [{ op: "insert", at: pl.trackCount || 0, tracks: items }];
+    const r = await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
+    return { playlist: normPlaylist(r), added: items.length };
+  }
+
+  async removeFromPlaylist(kind, track, index) {
+    this.requireAuth();
+    const pl = await this.api.playlist(this.api.uid, kind);
+    // позицию берём из актуального плейлиста: индекс на экране мог устареть
+    const at = (pl.tracks || []).findIndex((x, i) => String(x.id) === String(track.id) && (index == null || i === index));
+    const pos = at >= 0 ? at : (pl.tracks || []).findIndex((x) => String(x.id) === String(track.id));
+    if (pos < 0) throw new ApiError("Трека уже нет в плейлисте", 404);
+    const entry = pl.tracks[pos];
+    const diff = [{ op: "delete", from: pos, to: pos + 1, tracks: [{ id: String(entry.id), albumId: entry.albumId ? String(entry.albumId) : undefined }] }];
+    await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
+    return { ok: true };
+  }
+
+  async deletePlaylist(kind) {
+    this.requireAuth();
+    await this.api.deletePlaylist(this.api.uid, kind);
+    this.cache.delete("home");
+    return { ok: true };
+  }
+
+  async renamePlaylist(kind, title) {
+    this.requireAuth();
+    const name = String(title || "").trim().slice(0, 100);
+    if (!name) throw new ApiError("Пустое название", 400);
+    const r = await this.api.renamePlaylist(this.api.uid, kind, name);
+    return { playlist: normPlaylist(r) };
   }
 }
