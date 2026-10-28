@@ -11,6 +11,7 @@ import { DEFAULT_CURATION, songKey } from "./curate.js";
 import { WaveManager, WAVE_SETTINGS } from "./wave.js";
 import { Uncensor } from "./uncensor.js";
 import { getLyrics } from "./lyrics.js";
+import { translateLines } from "./lyrics-translate.js";
 import { PlayLog, computeStats } from "./stats.js";
 import { Podcasts } from "./podcasts.js";
 
@@ -389,7 +390,27 @@ export class Service {
 
   async lyrics(track) {
     this.requireAuth();
-    return (await getLyrics(this.api, track, { prefer: this.prefs.lyricsPrefer, fetchImpl: this.fetch })) || { source: null, synced: false, lines: [], plain: "" };
+    // the side panel and Now Playing each mount a lyrics view: one fetch per track serves both, and LRCLIB
+    // (asked on every lookup for word timings) isn't hit again on every remount
+    const cache = (this.lyricsCache ??= new Map());
+    const key = `${track?.id}:${this.prefs.lyricsPrefer}`;
+    const hit = cache.get(key);
+    if (hit && Date.now() < hit.until) return hit.data;
+    const data = (await getLyrics(this.api, track, { prefer: this.prefs.lyricsPrefer, fetchImpl: this.fetch })) || { source: null, synced: false, lines: [], plain: "" };
+    // an empty answer may be a transient LRCLIB failure: keep it briefly
+    cache.set(key, { data, until: Date.now() + (data.lines.length || data.plain ? 30 * 60000 : 60000) });
+    if (cache.size > 60) cache.delete(cache.keys().next().value);
+    return data;
+  }
+
+  async lyricsTranslate({ id, lines } = {}) {
+    const cache = (this.lyricsTrCache ??= new Map());
+    const key = `${id}:${crypto.createHash("sha1").update(JSON.stringify(lines || [])).digest("hex")}`;
+    if (cache.has(key)) return cache.get(key);
+    const data = await translateLines(lines, { target: "ru", fetchImpl: this.fetch });
+    cache.set(key, data);
+    if (cache.size > 40) cache.delete(cache.keys().next().value);
+    return data;
   }
 
   async setLike(trackId, liked) {
