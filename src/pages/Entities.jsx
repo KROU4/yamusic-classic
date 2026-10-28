@@ -67,7 +67,7 @@ export function AlbumPage({ id }) {
           {album.year && ` · ${album.year}`}
           {` · ${plural(tracks.length, "трек", "трека", "треков")}, ${totalDuration(tracks)}`}
         </div>
-        {album.labels?.length > 0 && <div class="page-meta small">{album.labels.join(", ")}</div>}
+        {album.labels?.length > 0 && <div class="page-meta small">Лейбл: {album.labels.join(", ")}</div>}
       </PageHead>
       <TrackList tracks={tracks} ctx={ctx} showCover={false} numbered />
     </div>

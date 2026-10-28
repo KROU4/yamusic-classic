@@ -26,7 +26,7 @@
   --vibe-bg: #121212;
   --vibe-fg: #ffffff;
   --text: #e6e6e6;
-  --text-2: rgba(255, 255, 255, 0.5);
+  --text-2: rgba(255, 255, 255, 0.7);
   --text-3: rgba(255, 255, 255, 0.56);
   --text-4: rgba(255, 255, 255, 0.32); /* decoration only, never text */
   --accent-text: var(--accent);
@@ -58,8 +58,8 @@
   --vibe-bg: #ffffff;
   --vibe-fg: #121212;
   --text: #1a1a1a;
-  --text-2: #666666;
-  --text-3: #707070;
+  --text-2: #4d4d4d;
+  --text-3: #5e5e5e;
   --text-4: rgba(0, 0, 0, 0.3);
   --accent-text: #8a6100; /* the yellow accent is unreadable as text on white */
   --like: #e5304f;
@@ -291,7 +291,7 @@ h3 {
   background: var(--bg-elev-2);
 }
 .sb-nav a.on .icon {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .sidebar.is-collapsed .sb-nav a {
   justify-content: center;
@@ -591,7 +591,7 @@ h3 {
   background: var(--bg-hover);
 }
 .icon-btn.on {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .icon-btn.like.on {
   color: var(--like);
@@ -667,7 +667,7 @@ h3 {
   font-size: 24px;
 }
 .section-head h2 a:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .section-more {
   font-size: 14px;
@@ -868,7 +868,7 @@ h3 {
   inset: -26% -10%;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--vibe-bg) 55%, transparent), transparent);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--vibe-bg) 72%, transparent), transparent);
 }
 .vibe-title {
   display: inline-flex;
@@ -987,7 +987,7 @@ h3 {
   flex-wrap: wrap;
 }
 .btn.is-on {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- home tabs ---------- */
@@ -1121,7 +1121,7 @@ h3 {
   background: var(--bg-hover);
 }
 .track.is-current .t {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 :root[data-theme="light"] .track.is-current .t {
   color: var(--accent-text);
@@ -1249,7 +1249,7 @@ h3 {
 }
 .badge-sub {
   background: none;
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: inset 0 0 0 1px var(--accent);
   font-weight: 500;
 }
@@ -1378,7 +1378,7 @@ h3 {
   border: 1px solid var(--divider);
   border-radius: var(--radius-lg);
   transition: background-color 0.6s ease;
-  z-index: 6;
+  z-index: 30;
 }
 .player-center {
   display: flex;
@@ -1514,7 +1514,7 @@ h3 {
 }
 .player-meta {
   flex: 1 1 auto;
-  min-width: 90px;
+  min-width: 0;
 }
 .player-title {
   display: flex;
@@ -1575,29 +1575,16 @@ h3 {
   flex-shrink: 0;
 }
 .player-quality.hq {
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 .player-quality.rate {
-  color: var(--accent);
+  color: var(--accent-text);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 @media (max-width: 1180px) {
   .player-ctx {
     display: none;
-  }
-}
-@media (max-width: 980px) {
-  .player {
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 1.4fr) auto;
-    gap: 12px;
-  }
-  .player-quality,
-  .player-track .icon-btn:not(.like) {
-    display: none;
-  }
-  .volume-bar {
-    width: 64px;
   }
 }
 
@@ -1757,7 +1744,7 @@ h3 {
   opacity: 0.5;
 }
 .q-item.on .q-title {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .q-main {
   text-align: left;
@@ -2062,7 +2049,7 @@ h3 {
 }
 .menu-create input:focus,
 .text-input:focus {
-  border-color: var(--accent);
+  border-color: var(--accent-text);
 }
 .text-input {
   flex: 0 0 240px;
@@ -2147,8 +2134,8 @@ h3 {
   background: #0b0b0b; /* the edges of the blurred background are transparent — the page must not show through beneath them */
   animation: np-in 0.28s var(--ease);
   --text: #fff;
-  --text-2: rgba(255, 255, 255, 0.7);
-  --text-3: rgba(255, 255, 255, 0.45);
+  --text-2: rgba(255, 255, 255, 0.78);
+  --text-3: rgba(255, 255, 255, 0.72);
   --line: rgba(255, 255, 255, 0.14);
   --bg-hover: rgba(255, 255, 255, 0.1);
   --bg-elev-2: rgba(255, 255, 255, 0.12);
@@ -2169,7 +2156,7 @@ h3 {
 .np-shade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.72));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.8));
 }
 .np-close {
   position: absolute;
@@ -2573,7 +2560,7 @@ h3 {
   direction: rtl;
   width: 22px;
   height: 120px;
-  accent-color: var(--accent);
+  accent-color: var(--accent-text);
   cursor: pointer;
 }
 .eq-db {
@@ -2667,11 +2654,6 @@ kbd {
 }
 
 /* Now Playing during a wave: animation under the cover */
-.np .vibe-canvas {
-  z-index: 0;
-  opacity: 0.6;
-  mix-blend-mode: screen;
-}
 .np-body {
   position: relative;
   z-index: 1;
@@ -2684,7 +2666,6 @@ kbd {
   }
   .sidebar:not(.is-collapsed) .logo-text,
   .sb-collapse,
-  .sidebar:not(.is-collapsed) .pin-text,
   .sidebar:not(.is-collapsed) .pin-x,
   .sidebar:not(.is-collapsed) .sb-hint,
   .sidebar:not(.is-collapsed) .sb-update span,
@@ -2715,11 +2696,6 @@ kbd {
   }
   .topbar,
   .page {
-    padding-left: 24px;
-    padding-right: 24px;
-  }
-  .vibe {
-    margin: 0 -24px 8px;
   }
 }
 
@@ -2849,7 +2825,7 @@ kbd {
   background: var(--bg-hover);
 }
 .episode.is-current .t {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 :root[data-theme="light"] .episode.is-current .t {
   color: var(--accent-text);
@@ -2976,7 +2952,7 @@ kbd {
   color: var(--text-2);
 }
 .ep-done {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ep-actions {
   display: flex;
@@ -3384,7 +3360,7 @@ kbd {
 }
 .ynison-device.on > .icon,
 .ynison-device.on .ynison-device-note {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .ynison-device.off {
   opacity: 0.55;
@@ -3457,7 +3433,7 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 .more-source-sub.hq {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .more-group {
   display: flex;
@@ -3472,7 +3448,7 @@ kbd {
 }
 .more-value {
   font-weight: 400;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 .more-menu .chips {
   gap: 6px;
@@ -3519,7 +3495,7 @@ kbd {
   .player .icon-btn.opt,
   .player .icon-btn.dislike,
   .player-time,
-  .volume-bar {
+  .player .volume-bar {
     display: none;
   }
   /* the progress becomes a thin seek line along the bar's top edge */
@@ -3547,11 +3523,6 @@ kbd {
 @media (max-width: 700px) {
   .topbar,
   .page {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-  .vibe {
-    margin: 0 -16px 8px;
   }
 }
 @media (max-height: 720px) {
@@ -3689,9 +3660,6 @@ button.state-chip:hover {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.np .vibe-canvas {
-  opacity: 0.5;
-}
 .np-switch {
   display: none;
   position: absolute;
@@ -3823,14 +3791,25 @@ button.state-chip:hover {
 .np-cover {
   align-self: flex-start;
 }
-.np .vibe-canvas {
-  opacity: 0.32;
+@media (min-width: 861px) {
+  .np-body:has(.lyrics-none) {
+    grid-template-columns: minmax(320px, 460px);
+  }
+  .np-body:has(.lyrics-none) .np-right {
+    display: none;
+  }
 }
-.np-body:has(.lyrics-none) {
-  grid-template-columns: minmax(320px, 460px);
-}
-.np-body:has(.lyrics-none) .np-right {
+/* nothing to switch to: the cover/lyrics switch goes away and the cover stays */
+.np:has(.lyrics-none) .np-switch {
   display: none;
+}
+@media (max-width: 860px) {
+  .np-body:has(.lyrics-none) .np-left {
+    display: flex;
+  }
+  .np-body:has(.lyrics-none) .np-right {
+    display: none;
+  }
 }
 /* loading lyrics: a few placeholder lines instead of a spinner */
 .lyrics-skeleton {
@@ -3849,4 +3828,66 @@ button.state-chip:hover {
   to {
     opacity: 0.4;
   }
+}
+
+/* ---------- recheck fixes ---------- */
+.vibe-now {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vibe-bg) 40%, transparent);
+}
+@media (max-width: 1000px) {
+  .sidebar:not(.is-collapsed) .pin-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+:root[data-theme="light"] .np :focus-visible {
+  outline-color: #fff;
+}
+.np {
+  z-index: var(--z-np);
+}
+.modal-scrim {
+  z-index: var(--z-modal);
+}
+/* mid widths: the title keeps its room, rarer things move into «Ещё» */
+@media (max-width: 1280px) {
+  .player {
+    grid-template-columns: minmax(240px, 1fr) minmax(260px, 440px) minmax(min-content, 1fr);
+  }
+  .player-cover {
+    width: 56px;
+    height: 56px;
+  }
+  .player .icon-btn.dislike {
+    display: none;
+  }
+}
+@media (max-width: 1100px) {
+  .state-chips,
+  .player .volume-bar {
+    display: none;
+  }
+}
+@media (max-width: 860px) {
+  .player {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+}
+.player .more-menu .volume-bar {
+  display: block;
+  flex: 1;
+  width: auto;
+}
+.more-volume .volume {
+  width: 100%;
+  margin: 0;
+}
+.more-row.on {
+  color: var(--accent-text);
 }

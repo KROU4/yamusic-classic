@@ -95,7 +95,7 @@ export function SettingsPage({ me, onReconnect }) {
         />
         <Choice
           label="Треки из «Мне нравится» в волне"
-          hint="Главная жалоба на волну: она крутит уже знакомое"
+          hint="Как часто в волну попадают треки, которые вы уже лайкнули"
           value={cur.likedEvery}
           options={[
             [0, "Не включать"],

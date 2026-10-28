@@ -16,6 +16,13 @@ import * as p from "../player/engine.js";
 export const panel = signal(null); // null | "lyrics" | "queue"
 export const togglePanel = (name) => (panel.value = panel.value === name ? null : name);
 
+// a drag keeps the slider even off the bar; synthetic or already released pointers can't be captured
+const capture = (e) => {
+  try {
+    e.currentTarget.setPointerCapture(e.pointerId);
+  } catch {}
+};
+
 export function Progress() {
   const bar = useRef(null);
   const [hover, setHover] = useState(null);
@@ -27,23 +34,27 @@ export function Progress() {
     const r = bar.current.getBoundingClientRect();
     return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur;
   };
+  const dragging = useRef(false);
   const onDown = (e) => {
     if (!dur) return;
+    capture(e);
+    dragging.current = true;
     p.seek(at(e));
-    const move = (ev) => p.seek(at(ev));
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
   };
+  const onMove = (e) => {
+    if (dur) setHover({ x: e.clientX - bar.current.getBoundingClientRect().left, t: at(e) });
+    if (dragging.current) p.seek(at(e));
+  };
+  const onEnd = () => (dragging.current = false);
   return (
     <div
       class="progress"
       ref={bar}
       onPointerDown={onDown}
-      onPointerMove={(e) => dur && setHover({ x: e.clientX - bar.current.getBoundingClientRect().left, t: at(e) })}
+      onPointerMove={onMove}
+      onPointerUp={onEnd}
+      onPointerCancel={onEnd}
+      onLostPointerCapture={onEnd}
       onPointerLeave={() => setHover(null)}
       role="slider"
       tabIndex={dur ? 0 : -1}
@@ -79,15 +90,13 @@ export function Volume() {
     const r = ref.current.getBoundingClientRect();
     p.setVolume((e.clientX - r.left) / r.width);
   };
+  const dragging = useRef(false);
   const onDown = (e) => {
+    capture(e);
+    dragging.current = true;
     set(e);
-    const up = () => {
-      window.removeEventListener("pointermove", set);
-      window.removeEventListener("pointerup", up);
-    };
-    window.addEventListener("pointermove", set);
-    window.addEventListener("pointerup", up);
   };
+  const onEnd = () => (dragging.current = false);
   return (
     <div class="volume">
       <button class="icon-btn" onClick={p.toggleMute} aria-label={p.muted.value ? "Включить звук" : "Выключить звук"}>
@@ -97,6 +106,10 @@ export function Volume() {
         class="volume-bar"
         ref={ref}
         onPointerDown={onDown}
+        onPointerMove={(e) => dragging.current && set(e)}
+        onPointerUp={onEnd}
+        onPointerCancel={onEnd}
+        onLostPointerCapture={onEnd}
         onWheel={(e) => p.setVolume(p.volume.value + (e.deltaY < 0 ? 0.05 : -0.05))}
         role="slider"
         tabIndex={0}
@@ -141,6 +154,7 @@ function qualityLabel(st) {
 function useDismiss(open, setOpen, box) {
   useEffect(() => {
     if (!open) return;
+    const back = box.current?.querySelector(".more-btn, button");
     const onDown = (e) => !box.current?.contains(e.target) && setOpen(false);
     const onKey = (e) => {
       if (e.key !== "Escape") return;
@@ -152,6 +166,8 @@ function useDismiss(open, setOpen, box) {
     return () => {
       window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("keydown", onKey, true);
+      // closed by keyboard or an action inside: keyboard users keep their place
+      if (box.current?.contains(document.activeElement) || document.activeElement === document.body) back?.focus();
     };
   }, [open]);
 }
@@ -178,8 +194,9 @@ function MoreMenu({ t, ctx, st }) {
   const rate = p.rate.value;
   const eqOn = webAudio && eq.value.enabled;
   // the timer and speed show as chips in the bar; the dot only flags what has no chip (the equalizer)
-  const changed = eqOn;
-  const label = sleep ? (sleep.mode === "track" ? "Ещё · таймер сна: до конца трека" : `Ещё · таймер сна: ${left} мин`) : "Ещё";
+  const changed = eqOn || !!sleep || rate !== 1;
+  const notes = [sleep && (sleep.mode === "track" ? "таймер сна до конца трека" : `таймер сна ${left} мин`), rate !== 1 && `скорость ${rateLabel(rate)}`, eqOn && "эквалайзер включён"].filter(Boolean);
+  const label = notes.length ? `Ещё · ${notes.join(", ")}` : "Ещё";
   return (
     <div class="popover-wrap" ref={box}>
       <button class={`icon-btn more-btn ${open ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} title={label} aria-expanded={open} aria-haspopup="dialog">
@@ -212,7 +229,7 @@ function MoreMenu({ t, ctx, st }) {
             </div>
             <div class="chips">
               {SLEEP_OPTIONS.map(([v, l]) => (
-                <button key={v} class={`chip ${(v === "track" ? sleep?.mode === "track" : sleep?.mode === "time" && sleep?.minutes === v) ? "on" : ""}`} onClick={() => p.setSleepTimer(v)}>
+                <button key={v} class={`chip ${(v === "track" ? sleep?.mode === "track" : sleep?.mode === "time" && sleep?.minutes === v) ? "on" : ""}`} aria-pressed={v === "track" ? sleep?.mode === "track" : sleep?.mode === "time" && sleep?.minutes === v} onClick={() => p.setSleepTimer(v)}>
                   {l}
                 </button>
               ))}
@@ -228,7 +245,7 @@ function MoreMenu({ t, ctx, st }) {
             <div class="more-label">Скорость</div>
             <div class="chips">
               {RATES.map((r) => (
-                <button key={r} class={`chip ${rate === r ? "on" : ""}`} onClick={() => p.setRate(r)}>
+                <button key={r} class={`chip ${rate === r ? "on" : ""}`} aria-pressed={rate === r} onClick={() => p.setRate(r)}>
                   {rateLabel(r)}
                 </button>
               ))}
@@ -246,6 +263,16 @@ function MoreMenu({ t, ctx, st }) {
           </div>
 
           {/* in a narrow window shuffle and repeat leave the bar and live here */}
+          {ctx?.type === "wave" && t && (
+            <button class={`menu-item more-row dislike-row ${p.isDisliked(t) ? "on" : ""}`} onClick={() => p.dislike(t)} aria-pressed={p.isDisliked(t)}>
+              <Icon name="ban" size={18} /> Не нравится — не предлагать
+            </button>
+          )}
+
+          <div class="more-group narrow-only more-volume">
+            <Volume />
+          </div>
+
           <div class="more-group narrow-only">
             <button class={`menu-item more-row ${p.shuffle.value ? "on" : ""}`} onClick={p.toggleShuffle} aria-pressed={p.shuffle.value}>
               <Icon name="shuffle" size={18} /> Перемешивать
@@ -384,7 +411,7 @@ export function PlayerBar() {
           <button
             class={`icon-btn opt ${p.repeat.value !== "none" ? "on" : ""}`}
             onClick={p.cycleRepeat}
-            aria-label="Повтор"
+            aria-label={{ none: "Повтор выключен", all: "Повторять всё", one: "Повторять трек" }[p.repeat.value]}
             title={{ none: "Повтор выключен", all: "Повторять всё", one: "Повторять трек" }[p.repeat.value]}
           >
             <Icon name={p.repeat.value === "one" ? "repeatOne" : "repeat"} />

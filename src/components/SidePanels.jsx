@@ -57,7 +57,7 @@ export function Lyrics() {
           <div class="lyrics-artist">{artistNames(t)}</div>
         </div>
         {state.status === "loading" && (
-          <div class="lyrics-skeleton" aria-label="Загружаем текст">
+          <div class="lyrics-skeleton" role="status" aria-label="Загружаем текст">
             {[72, 54, 80, 46, 66, 58].map((w, i) => (
               <i key={i} style={{ width: `${w}%` }} />
             ))}
@@ -165,10 +165,10 @@ export function SidePanel() {
   return (
     <aside class="side-panel" aria-label={panel.value === "lyrics" ? "Текст песни" : "Очередь"}>
       <div class="side-tabs">
-        <button class={panel.value === "lyrics" ? "on" : ""} onClick={() => (panel.value = "lyrics")}>
+        <button class={panel.value === "lyrics" ? "on" : ""} aria-pressed={panel.value === "lyrics"} onClick={() => (panel.value = "lyrics")}>
           Текст
         </button>
-        <button class={panel.value === "queue" ? "on" : ""} onClick={() => (panel.value = "queue")}>
+        <button class={panel.value === "queue" ? "on" : ""} aria-pressed={panel.value === "queue"} onClick={() => (panel.value = "queue")}>
           Очередь
         </button>
         <button class="icon-btn side-close" onClick={() => (panel.value = null)} aria-label="Закрыть">

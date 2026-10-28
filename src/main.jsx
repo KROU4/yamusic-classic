@@ -44,6 +44,8 @@ window.addEventListener("keydown", (e) => {
   const pos = player.position.value;
   switch (e.code) {
     case "Space":
+      // a focused button, chip or link uses Space itself (keyboard activation); only the page background toggles playback
+      if (e.target.closest?.("button, a, [role=button], [role=slider], [role=tab], summary")) return;
       e.preventDefault();
       player.toggle();
       break;

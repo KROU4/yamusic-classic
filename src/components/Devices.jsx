@@ -93,8 +93,17 @@ export function DevicesButton() {
   useEffect(() => {
     if (!open) return;
     const onDown = (e) => !box.current?.contains(e.target) && setOpen(false);
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
     window.addEventListener("pointerdown", onDown, true);
-    return () => window.removeEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
   }, [open]);
   if (!v.enabled) return null;
   const remote = v.status === "online" && v.activeDevice && !v.activeIsMe;

@@ -67,7 +67,7 @@ function PinItem({ pin, i, collapsed }) {
         if (Number.isInteger(from)) movePin(from, i);
       }}
     >
-      <button class="pin-main" onClick={open} title={collapsed ? `${pin.title} · ${KIND[pin.type]}` : undefined}>
+      <button class="pin-main" onClick={open} title={`${pin.title} · ${KIND[pin.type]}`} aria-label={`${pin.title} · ${KIND[pin.type]}`}>
         <PinThumb pin={pin} />
         {!collapsed && (
           <span class="pin-text">
@@ -121,7 +121,7 @@ export function Sidebar({ me }) {
 
       <div class="sb-sep" />
       <div class="sb-scroll">
-        <a class={`pin fav ${name === "collection" && (!tab || tab === "likes") ? "on" : ""}`} href={href("/collection/likes")} title={collapsed ? "Мне нравится" : undefined}>
+        <a class={`pin fav ${name === "collection" && (!tab || tab === "likes") ? "on" : ""}`} href={href("/collection/likes")} title="Мне нравится" aria-label="Мне нравится">
           <span class="pin-main">
             <span class="pin-thumb like">
               <Icon name="heart" size={18} />
