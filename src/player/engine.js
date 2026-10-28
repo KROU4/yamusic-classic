@@ -73,14 +73,18 @@ function startSession(track) {
 function finishSession(reason, opts) {
   const s = session;
   session = null;
-  if (!s || !s.track) return;
+  if (!s || !s.track) return Promise.resolve();
   const durationSeconds = (s.track.durationMs || 0) / 1000 || duration.value;
-  api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId }, opts).catch(() => {});
+  const jobs = [api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId }, opts).catch(() => {})];
   if (context.value?.type === "wave") {
     const type = reason === "ended" ? "trackFinished" : "skip";
-    api.post("/wave/feedback", { type, track: s.track, playedSeconds: s.played }, opts).catch(() => {});
+    jobs.push(api.post("/wave/feedback", { type, track: s.track, playedSeconds: s.played }, opts).catch(() => {}));
   }
+  return Promise.all(jobs);
 }
+
+// Electron вызывает это перед закрытием окна и ждёт, пока прослушивание уйдёт в историю
+window.__ymcFinalize = () => finishSession("skip");
 
 // Подряд пропущенные недоступные треки: защита от бесконечного перебора (например, альбом закрыт в регионе + повтор всего)
 let skipStreak = 0;
@@ -122,7 +126,6 @@ async function load(i, { autoplay = true } = {}) {
   try {
     const r = await resolveTrack(track);
     if (token !== loadToken) return;
-    skipStreak = 0;
     // трек мог быть заменён на версию без цензуры — показываем, что играет на самом деле
     if (r.track && r.track.id !== track.id) {
       const copy = [...queue.value];
@@ -179,7 +182,6 @@ export function playList(tracks, startIndex = 0, ctx = {}) {
 
 /** Запустить волну (по умолчанию «Моя волна»). */
 export async function playWave({ stationId = "user:onyourwave", settings, title = "Моя волна" } = {}) {
-  finishSession("skip");
   const token = ++loadToken;
   loading.value = true;
   try {
@@ -190,6 +192,8 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
       toast("Волна ничего не нашла — ослабьте фильтры анти-повтора в настройках");
       return;
     }
+    // учёт прошлого трека закрываем только сейчас: если волна не стартовала, он продолжает играть
+    finishSession("skip");
     queueGen++;
     skipStreak = 0;
     waveFetching = null;
@@ -351,6 +355,7 @@ export async function dislike(track) {
 audio.addEventListener("playing", () => {
   playing.value = true;
   loading.value = false;
+  skipStreak = 0; // сбрасываем только когда звук реально пошёл, а не когда получена ссылка
 });
 audio.addEventListener("pause", () => (playing.value = false));
 audio.addEventListener("waiting", () => (loading.value = true));

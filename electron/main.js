@@ -106,7 +106,23 @@ function createWindow(url, key) {
     log(`окно показано через ${Date.now() - t0} мс после старта`);
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
-  win.on("close", saveBounds);
+  // перед закрытием окно отправляет текущее прослушивание в историю (анти-повтор и отчёт Яндексу)
+  let finalized = false;
+  win.on("close", (e) => {
+    saveBounds();
+    if (finalized) return;
+    e.preventDefault();
+    finalized = true;
+    const close = () => win?.destroy();
+    const timer = setTimeout(close, 2000);
+    win.webContents
+      .executeJavaScript("window.__ymcFinalize ? window.__ymcFinalize() : null")
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timer);
+        close();
+      });
+  });
   win.on("closed", () => {
     win = null;
   });
@@ -186,6 +202,10 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   quitting = true;
+});
+
+// will-quit наступает после закрытия окон — к этому моменту финальное прослушивание уже записано
+app.on("will-quit", () => {
   backend?.svc.store.saveNow();
 });
 

@@ -1,6 +1,7 @@
 // Менеджер волны поверх rotor/session: буфер уже отфильтрованных треков и фидбэк серверу.
 import { normTrack } from "./normalize.js";
 import { curate } from "./curate.js";
+import { ApiError } from "./yandex.js";
 
 // Значения сидов настроек — как в «Настроить волну» классического интерфейса
 export const WAVE_SETTINGS = {
@@ -38,7 +39,10 @@ export class WaveManager {
     const { api, history } = this.deps;
     const seeds = [stationId, ...settingsSeeds(settings), ...extraSeeds];
     const queue = history.tape.slice(-30).map((t) => t.id);
+    const gen = (this.startGen = (this.startGen || 0) + 1);
     const r = await api.sessionNew({ seeds, queue, allowExplicit: this.prefs.allowExplicit, aiReduced: this.prefs.aiReduced });
+    // пока ждали ответ, пользователь запустил другую станцию — этот запуск устарел
+    if (gen !== this.startGen) throw new ApiError("Запуск станции отменён более новым", 409);
     this.session = {
       id: r.radioSessionId,
       batchId: r.batchId,
