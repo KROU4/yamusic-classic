@@ -92,9 +92,15 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
 
     // статика собранного фронтенда, SPA-фолбэк на index.html
     if (!staticDir) return send(404, "no static");
-    const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
-    let file = path.resolve(staticDir, rel || "index.html");
-    if (!file.startsWith(path.resolve(staticDir))) return send(400, "bad path");
+    let rel;
+    try {
+      rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
+    } catch {
+      return send(400, "bad path");
+    }
+    const base = path.resolve(staticDir);
+    let file = path.resolve(base, rel || "index.html");
+    if (file !== base && !file.startsWith(base + path.sep)) return send(400, "bad path");
     if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(staticDir, "index.html");
     const ext = path.extname(file);
     const cache = ext === ".html" ? "no-store" : "public, max-age=31536000, immutable";

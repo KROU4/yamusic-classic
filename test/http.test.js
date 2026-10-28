@@ -57,6 +57,22 @@ describe("локальный HTTP-сервер", () => {
     });
     expect(JSON.parse(r.body)).toEqual({ theme: "light" });
   });
+  it("статика: битый %-escape и выход из каталога не роняют сервер", async () => {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ymc-static-"));
+    fs.writeFileSync(path.join(dir, "index.html"), "<p>ok</p>");
+    const s2 = createServer({ svc, staticDir: dir, key });
+    const { port: p2 } = await s2.listen(0);
+    try {
+      expect((await request(p2, "/%E0")).status).toBe(400);
+      expect((await request(p2, "/..%2f..%2fetc")).status).toBe(400);
+      expect((await request(p2, "/")).body).toContain("ok");
+    } finally {
+      await s2.close();
+    }
+  });
   it("неизвестный маршрут — 404", async () => {
     const r = await request(port, "/api/nope", { headers: { "x-ymc-key": key } });
     expect(r.status).toBe(404);

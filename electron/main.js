@@ -1,5 +1,5 @@
 // Оболочка Electron: поднимает локальный бэкенд и открывает окно с интерфейсом.
-import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -176,6 +176,8 @@ app.on("second-instance", () => {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  // музыкальному клиенту не нужны ни камера, ни микрофон, ни уведомления сайтов
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   backend = await startBackend();
   log(`бэкенд готов через ${Date.now() - t0} мс`);
   createWindow(backend.url, backend.srv.key);
