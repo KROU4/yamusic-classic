@@ -47,6 +47,8 @@ const PATHS = {
   chevronRight: "M8.6 6.4 10 5l7 7-7 7-1.4-1.4 5.6-5.6z",
   sidebar: "M3 4h18v16H3zm2 2v12h4V6zm6 0v12h8V6z",
   eq: "M5 4h2v6h2v2H7v8H5v-8H3v-2h2zm6 0h2v10h2v2h-2v4h-2v-4H9v-2h2zm6 0h2v4h2v2h-2v10h-2V10h-2V8h2z",
+  // My Wave for two
+  duo: "M8.5 5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm0 2a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM16 6a3 3 0 1 1 0 6 3 3 0 0 1 0-6zm0 2a1 1 0 1 0 0 2 1 1 0 0 0 0-2zM8.5 13.5c3.6 0 6.5 1.5 6.5 3.5v2H2v-2c0-2 2.9-3.5 6.5-3.5zm0 2c-2.3 0-4.1.7-4.4 1.5h8.8c-.3-.8-2.1-1.5-4.4-1.5zM16 13.5c3.3 0 6 1.3 6 3.2V19h-5v-2h3c-.3-.8-2-1.5-4-1.5-.4 0-.8 0-1.2.1l-.6-1.9c.6-.1 1.2-.2 1.8-.2z",
 };
 
 export function Icon({ name, size = 20, class: cls = "", title }) {

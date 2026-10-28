@@ -13,6 +13,7 @@ const ROUTES = [
   ["radio", /^\/radio$/],
   ["settings", /^\/settings$/],
   ["stats", /^\/stats$/],
+  ["multivibe", /^\/multivibe(?:\/(?<room>[^/]+))?$/],
 ];
 
 function parse() {

@@ -8,6 +8,8 @@ import { artistNames } from "../lib/format.js";
 import { isPinned, togglePin } from "../lib/pins.js";
 import { toast } from "../lib/toast.js";
 import { nowPlayingOpen } from "../lib/ui.js";
+import { go } from "../lib/router.js";
+import { q2vSeed, isPromptStation, promptFromSeed, promptTitle, promptMood, promptPin, normalizePrompt, PROMPT_EXAMPLES, MAX_PROMPT } from "../lib/q2v.js";
 import { waveSettings, setWaveSettings, editWaveSettings, sameWaveSettings, DEFAULT_WAVE_SETTINGS as DEFAULT_SETTINGS } from "../player/waveState.js";
 import * as p from "../player/engine.js";
 
@@ -68,6 +70,137 @@ export function settingsSummary(s) {
 const isDefault = (s) => !settingsSummary(s);
 export const wavePin = (s) => ({ type: "wave", title: settingsSummary(s) || "Моя волна", settings: { ...DEFAULT_SETTINGS, ...s } });
 
+// ---------- My Wave from a text prompt ----------
+const RECENT_KEY = "ymc-q2v-recent";
+
+function readRecent() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RECENT_KEY));
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string" && x).slice(0, 5) : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberPrompt(prompt) {
+  try {
+    const list = [prompt, ...readRecent().filter((x) => x.toLowerCase() !== prompt.toLowerCase())].slice(0, 5);
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list));
+  } catch {
+    // without persistence
+  }
+}
+
+/** Prompt of the wave that is in the player now (playing or paused), or null. */
+export function currentPrompt(ctx = p.context.value) {
+  return ctx?.type === "wave" && isPromptStation(ctx.stationId) ? promptFromSeed(ctx.stationId) || ctx.title || "" : null;
+}
+
+/** Starts a wave from free text; true when it really is what plays now. */
+export async function playPrompt(text) {
+  const prompt = normalizePrompt(text);
+  const stationId = q2vSeed(prompt);
+  if (!stationId) return false;
+  rememberPrompt(prompt);
+  await p.playWave({ stationId, title: promptTitle(prompt) });
+  const ctx = p.context.peek();
+  return ctx?.type === "wave" && ctx.stationId === stationId;
+}
+
+function PromptBox({ onStarted }) {
+  const [text, setText] = useState(() => currentPrompt(p.context.peek()) || "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const input = useRef(null);
+  const recent = readRecent();
+  // recent prompts first, then examples nobody has typed yet; five chips is one or two rows
+  const chips = [...recent.slice(0, 3), ...PROMPT_EXAMPLES.filter((x) => !recent.some((r) => r.toLowerCase() === x.toLowerCase()))].slice(0, 5);
+  const submit = async (value = text) => {
+    const prompt = normalizePrompt(value);
+    if (!prompt) {
+      setError("Напишите пару слов о музыке — например, «спокойный джаз для работы»");
+      input.current?.focus();
+      return;
+    }
+    setText(prompt);
+    setError("");
+    setBusy(true);
+    const ok = await playPrompt(prompt);
+    setBusy(false);
+    if (ok) onStarted();
+    else setError("Не получилось подобрать музыку по этому запросу. Попробуйте описать иначе");
+  };
+  const typed = normalizePrompt(text);
+  const pin = typed ? promptPin(typed) : null;
+  const pinned = !!pin && isPinned(pin);
+  return (
+    <div class="ws-group ws-prompt">
+      <label class="ws-label" for="vibe-prompt">
+        Опишите, что хотите послушать
+      </label>
+      <form
+        class="prompt-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <input
+          id="vibe-prompt"
+          ref={input}
+          class="text-input prompt-input"
+          value={text}
+          maxLength={MAX_PROMPT}
+          placeholder="Что вы чувствуете или ищете?"
+          autocomplete="off"
+          spellcheck={false}
+          disabled={busy}
+          onInput={(e) => {
+            setText(e.currentTarget.value);
+            if (error) setError("");
+          }}
+        />
+        <button class="btn primary sm" type="submit" disabled={busy}>
+          {busy ? <span class="spinner sm" /> : <Icon name="play" size={16} />} Слушать
+        </button>
+        <button
+          type="button"
+          class={`icon-btn ${pinned ? "on" : ""}`}
+          disabled={!pin}
+          onClick={() => toast(togglePin(pin) ? "Запрос закреплён в боковом меню" : "Откреплено")}
+          aria-label={pinned ? "Открепить запрос" : "Закрепить запрос в боковом меню"}
+          title={pinned ? "Открепить запрос" : "Закрепить запрос в боковом меню"}
+        >
+          <Icon name="pin" size={18} />
+        </button>
+      </form>
+      {busy ? (
+        <div class="prompt-note">Думаю, что предложить…</div>
+      ) : error ? (
+        <div class="prompt-note is-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+      <div class="chips prompt-chips">
+        {chips.map((q) => (
+          <button
+            key={q}
+            type="button"
+            class="chip"
+            disabled={busy}
+            onClick={() => {
+              setText(q);
+              submit(q);
+            }}
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Settings({ onClose }) {
   const cur = waveSettings.value || DEFAULT_SETTINGS;
   const box = useRef(null);
@@ -109,6 +242,8 @@ function Settings({ onClose }) {
   const pinned = isPinned(wavePin(cur));
   return (
     <div class="vibe-settings" ref={box} role="dialog" aria-label="Настроить волну">
+      <PromptBox onStarted={onClose} />
+      <div class="ws-divider">или настройте Мою волну</div>
       {Object.entries(OPTIONS).map(([key, opts]) => (
         <div class="ws-group" key={key}>
           <div class="ws-label">{LABELS[key]}</div>
@@ -157,7 +292,10 @@ export function WaveHero() {
     loadWaveSettings().catch(() => {});
   }, []);
   const ctx = p.context.value;
-  const isWave = ctx?.type === "wave" && ctx.stationId === "user:onyourwave";
+  const isMyWave = ctx?.type === "wave" && ctx.stationId === "user:onyourwave";
+  // a prompt wave lives in the same hero: its text becomes the caption and its words pick the colours
+  const prompt = currentPrompt(ctx);
+  const isWave = isMyWave || prompt != null;
   const active = isWave && p.playing.value;
   const t = isWave ? p.current.value : null;
   const s = waveSettings.value;
@@ -172,12 +310,22 @@ export function WaveHero() {
     prevId.current = t?.id;
   }, [liked, t?.id]);
   // a paused wave whose settings were changed since it started is restarted with the new ones, not resumed
-  const start = () => (isWave && (p.playing.peek() || !s || sameWaveSettings(s, ctx.settings)) ? p.toggle() : p.playWave({ settings: s || undefined }));
+  const start = () =>
+    prompt != null || (isMyWave && (p.playing.peek() || !s || sameWaveSettings(s, ctx.settings))) ? p.toggle() : p.playWave({ settings: s || undefined });
+  const shake = () => (prompt != null ? p.playWave({ stationId: ctx.stationId, title: ctx.title }) : p.playWave({ settings: s || undefined }));
   return (
     <section class={`vibe ${active ? "is-active" : ""} ${open ? "is-tuning" : ""}`}>
       {/* under the full-screen Now Playing the hero is hidden — one WebGL loop at a time */}
-      <VibeCanvas colors={paletteFor(s)} active={isWave} pulseAt={pulseAt} paused={nowPlayingOpen.value} />
+      <VibeCanvas colors={paletteFor(prompt != null ? promptMood(prompt) : s)} active={isWave} pulseAt={pulseAt} paused={nowPlayingOpen.value} />
       <div class="vibe-center">
+        {prompt != null && (
+          <div class="vibe-prompt" title={promptTitle(prompt)}>
+            <span class="vibe-prompt-text">По запросу «{promptTitle(prompt)}»</span>
+            <button class="vibe-prompt-x" onClick={() => p.playWave({ settings: s || undefined })} aria-label="Вернуться к Моей волне" title="Вернуться к Моей волне">
+              <Icon name="close" size={14} />
+            </button>
+          </div>
+        )}
         <button class="vibe-title" onClick={start} aria-label={active ? "Пауза" : "Слушать Мою волну"}>
           <span class="vibe-title-icon">
             {p.loading.value && isWave && !p.playing.value ? <span class="spinner" /> : <Icon name={active ? "pause" : "play"} size={30} />}
@@ -198,10 +346,13 @@ export function WaveHero() {
             <Icon name="sliders" size={16} /> {summary && !open ? summary : "Настроить"}
           </button>
           {isWave && (
-            <button class="vibe-tune" onClick={() => p.playWave({ settings: s || undefined })} title="Перезапустить волну с новыми треками">
+            <button class="vibe-tune" onClick={shake} title="Перезапустить волну с новыми треками">
               <Icon name="shuffle" size={16} /> Встряхнуть
             </button>
           )}
+          <button class="vibe-tune" onClick={() => go("/multivibe")} title="Моя волна на двоих: общие рекомендации с другим человеком">
+            <Icon name="duo" size={16} /> На двоих
+          </button>
         </div>
         {open && <Settings onClose={() => setOpen(false)} />}
       </div>

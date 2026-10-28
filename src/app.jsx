@@ -17,6 +17,7 @@ import { AlbumPage, ArtistPage, PlaylistPage } from "./pages/Entities.jsx";
 import { SearchPage, CollectionPage, ChartPage, NewPage, RadioPage } from "./pages/Lists.jsx";
 import { SettingsPage } from "./pages/Settings.jsx";
 import { StatsPage } from "./pages/Stats.jsx";
+import { MultivibePage } from "./pages/Multivibe.jsx";
 import { Loading } from "./components/States.jsx";
 import * as player from "./player/engine.js";
 import { loadOverrides } from "./lib/overrides.js";
@@ -42,6 +43,8 @@ function Page({ me, reconnect }) {
       return <RadioPage />;
     case "stats":
       return <StatsPage />;
+    case "multivibe":
+      return <MultivibePage room={params.room} />;
     case "settings":
       return <SettingsPage me={me} onReconnect={reconnect} />;
     default:

@@ -6,6 +6,8 @@ import { route, href, go } from "../lib/router.js";
 import { pins, unpin, movePin, pinKey } from "../lib/pins.js";
 import { sidebarCollapsed } from "../lib/ui.js";
 import * as p from "../player/engine.js";
+import { q2vSeed, promptMood } from "../lib/q2v.js";
+import { playPrompt } from "./Wave.jsx";
 
 const NAV = [
   ["home", "/", "home", "Главная"],
@@ -27,7 +29,7 @@ function pinLink(pin) {
 
 function PinThumb({ pin }) {
   if (pin.type === "wave") {
-    const [a, b, c] = paletteFor(pin.settings);
+    const [a, b, c] = paletteFor(pin.prompt ? promptMood(pin.prompt) : pin.settings);
     return <span class="pin-thumb wave" style={{ background: `radial-gradient(circle at 35% 35%, ${a}, ${b} 55%, ${c})` }} />;
   }
   return <span class={`pin-thumb ${pin.type === "artist" ? "round" : ""}`}>{pin.cover ? <img src={pin.cover} alt="" loading="lazy" /> : <Icon name={pin.type === "artist" ? "artist" : "album"} size={18} />}</span>;
@@ -37,9 +39,12 @@ function PinItem({ pin, i, collapsed }) {
   const [over, setOver] = useState(false);
   const link = pinLink(pin);
   const ctx = p.context.value;
-  const isWaveOn = pin.type === "wave" && ctx?.type === "wave" && ctx.stationId === "user:onyourwave" && pinKey({ type: "wave", settings: ctx.settings }) === pinKey(pin);
+  const isWaveOn =
+    pin.type === "wave" &&
+    ctx?.type === "wave" &&
+    (pin.prompt ? ctx.stationId === q2vSeed(pin.prompt) : ctx.stationId === "user:onyourwave" && pinKey({ type: "wave", settings: ctx.settings }) === pinKey(pin));
   const active = link ? route.value.path === link : isWaveOn;
-  const open = () => (link ? go(link) : isWaveOn ? p.toggle() : p.playWave({ settings: pin.settings }));
+  const open = () => (link ? go(link) : isWaveOn ? p.toggle() : pin.prompt ? playPrompt(pin.prompt) : p.playWave({ settings: pin.settings }));
   return (
     <li
       class={`pin ${active ? "on" : ""} ${over ? "drop" : ""}`}
@@ -65,7 +70,7 @@ function PinItem({ pin, i, collapsed }) {
         {!collapsed && (
           <span class="pin-text">
             <span class="pin-title">{pin.title}</span>
-            <span class="pin-sub">{isWaveOn && p.playing.value ? "Играет" : KIND[pin.type]}</span>
+            <span class="pin-sub">{isWaveOn && p.playing.value ? "Играет" : pin.prompt ? "Волна по запросу" : KIND[pin.type]}</span>
           </span>
         )}
       </button>
