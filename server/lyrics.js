@@ -78,14 +78,11 @@ function shape(source, synced, plain) {
 export async function getLyrics(api, track, { prefer = "auto", fetchImpl = globalThis.fetch } = {}) {
   let yandex = null;
   if (prefer !== "lrclib" && (track.lyrics.sync || track.lyrics.text)) {
-    try {
-      const lrc = track.lyrics.sync ? await api.lyrics(track.id, "LRC") : null;
-      const txt = !lrc ? await api.lyrics(track.id, "TEXT") : null;
-      if (lrc) yandex = shape("yandex", lrc.text, null);
-      else if (txt) yandex = shape("yandex", null, txt.text);
-    } catch {
-      yandex = null;
-    }
+    // если LRC не отдался, всё равно пробуем обычный текст
+    const lrc = track.lyrics.sync ? await api.lyrics(track.id, "LRC").catch(() => null) : null;
+    const txt = !lrc ? await api.lyrics(track.id, "TEXT").catch(() => null) : null;
+    if (lrc) yandex = shape("yandex", lrc.text, null);
+    else if (txt) yandex = shape("yandex", null, txt.text);
   }
   const censored = yandex ? isCensoredText(yandex.plain) : false;
   if (yandex && prefer === "yandex") return { ...yandex, censored };

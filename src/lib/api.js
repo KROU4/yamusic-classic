@@ -34,9 +34,10 @@ export class HttpError extends Error {
   }
 }
 
-async function call(method, path, body) {
+async function call(method, path, body, { keepalive = false } = {}) {
   const res = await fetch(`/api${path}`, {
     method,
+    keepalive, // запрос переживёт закрытие страницы
     headers: { "x-ymc-key": KEY, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -47,7 +48,7 @@ async function call(method, path, body) {
 
 export const api = {
   get: (path) => call("GET", path),
-  post: (path, body = {}) => call("POST", path, body),
+  post: (path, body = {}, opts) => call("POST", path, body, opts),
 };
 
 /** Простой кэш страниц на время сессии: повторный заход на страницу — мгновенный. */

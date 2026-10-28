@@ -70,22 +70,44 @@ function startSession(track) {
 }
 
 /** Закрывает учёт трека: локальная история + отчёт Яндексу + фидбэк волны. */
-function finishSession(reason) {
+function finishSession(reason, opts) {
   const s = session;
   session = null;
   if (!s || !s.track) return;
   const durationSeconds = (s.track.durationMs || 0) / 1000 || duration.value;
-  api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId }).catch(() => {});
+  api.post("/played", { track: s.track, from: s.from, playedSeconds: s.played, durationSeconds, playId: s.playId }, opts).catch(() => {});
   if (context.value?.type === "wave") {
     const type = reason === "ended" ? "trackFinished" : "skip";
-    api.post("/wave/feedback", { type, track: s.track, playedSeconds: s.played }).catch(() => {});
+    api.post("/wave/feedback", { type, track: s.track, playedSeconds: s.played }, opts).catch(() => {});
   }
+}
+
+// Подряд пропущенные недоступные треки: защита от бесконечного перебора (например, альбом закрыт в регионе + повтор всего)
+let skipStreak = 0;
+const MAX_SKIP_STREAK = 25;
+
+function skipUnplayable(message) {
+  toast(message);
+  skipStreak += 1;
+  if (skipStreak >= Math.min(MAX_SKIP_STREAK, Math.max(1, queue.value.length))) {
+    skipStreak = 0;
+    loading.value = false;
+    playing.value = false;
+    audio.pause();
+    toast("Доступных для воспроизведения треков не нашлось");
+    return;
+  }
+  // асинхронно, чтобы цепочка пропусков не превращалась в синхронную рекурсию
+  setTimeout(() => next({ auto: true }), 0);
 }
 
 async function load(i, { autoplay = true } = {}) {
   const list = queue.value;
   const track = list[i];
-  if (!track) return;
+  if (!track) {
+    loading.value = false;
+    return;
+  }
   const token = ++loadToken;
   batch(() => {
     index.value = i;
@@ -95,12 +117,12 @@ async function load(i, { autoplay = true } = {}) {
   });
   if (!playable(track)) {
     loading.value = false;
-    toast(`«${track.title}» недоступен, пропускаю`);
-    return next({ auto: true });
+    return skipUnplayable(`«${track.title}» недоступен, пропускаю`);
   }
   try {
     const r = await resolveTrack(track);
     if (token !== loadToken) return;
+    skipStreak = 0;
     // трек мог быть заменён на версию без цензуры — показываем, что играет на самом деле
     if (r.track && r.track.id !== track.id) {
       const copy = [...queue.value];
@@ -118,10 +140,13 @@ async function load(i, { autoplay = true } = {}) {
     maybeExtendWave();
   } catch (e) {
     if (token !== loadToken) return;
-    if (e.status === 401) authError.value = true;
-    toast(`Не удалось включить «${track.title}»: ${e.message}`);
     loading.value = false;
-    playing.value = false;
+    if (e.status === 401) {
+      authError.value = true;
+      playing.value = false;
+      return;
+    }
+    skipUnplayable(`Не удалось включить «${track.title}»: ${e.message}`);
   }
 }
 
@@ -137,9 +162,14 @@ function order(tracks, startIndex) {
 }
 
 /** Включить список треков. ctx: { title, from, link } */
+// Поколение очереди: ответы, запрошенные для прежней очереди, в новую не попадают
+let queueGen = 0;
+
 export function playList(tracks, startIndex = 0, ctx = {}) {
   finishSession("skip");
   const { list, start } = order(tracks.filter(Boolean), startIndex);
+  queueGen++;
+  skipStreak = 0;
   batch(() => {
     queue.value = list;
     context.value = { type: "list", ...ctx };
@@ -150,36 +180,51 @@ export function playList(tracks, startIndex = 0, ctx = {}) {
 /** Запустить волну (по умолчанию «Моя волна»). */
 export async function playWave({ stationId = "user:onyourwave", settings, title = "Моя волна" } = {}) {
   finishSession("skip");
+  const token = ++loadToken;
   loading.value = true;
   try {
     const r = await api.post("/wave/start", { stationId, settings });
+    if (token !== loadToken) return; // пока ждали, пользователь включил что-то другое
+    if (!r.tracks?.length) {
+      loading.value = false;
+      toast("Волна ничего не нашла — ослабьте фильтры анти-повтора в настройках");
+      return;
+    }
+    queueGen++;
+    skipStreak = 0;
+    waveFetching = null;
     batch(() => {
       queue.value = r.tracks;
       context.value = { type: "wave", title, stationId, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
     });
     return load(0);
   } catch (e) {
+    if (token !== loadToken) return;
     loading.value = false;
     if (e.status === 401) authError.value = true;
     toast(`Волна не запустилась: ${e.message}`);
   }
 }
 
-async function maybeExtendWave() {
-  if (context.value?.type !== "wave" || waveFetching) return;
-  if (queue.value.length - index.value > 3) return;
-  waveFetching = api
+function maybeExtendWave() {
+  if (context.value?.type !== "wave") return Promise.resolve();
+  if (waveFetching) return waveFetching;
+  if (queue.value.length - index.value > 3) return Promise.resolve();
+  const gen = queueGen;
+  const p = api
     .get("/wave/next?count=4")
     .then((r) => {
+      if (gen !== queueGen) return;
       const known = new Set(queue.value.map((t) => t.id));
       const fresh = r.tracks.filter((t) => !known.has(t.id));
       if (fresh.length) queue.value = [...queue.value, ...fresh];
     })
     .catch(() => {})
     .finally(() => {
-      waveFetching = null;
+      if (waveFetching === p) waveFetching = null;
     });
-  return waveFetching;
+  waveFetching = p;
+  return p;
 }
 
 export async function next({ auto = false } = {}) {
@@ -277,8 +322,10 @@ export async function like(track, value = !isLiked(track)) {
     await api.post("/like", { trackId: track.id, liked: value });
     if (context.value?.type === "wave" && value) api.post("/wave/feedback", { type: "like", track }).catch(() => {});
   } catch (e) {
-    m.set(track.id, !value);
-    likeOverrides.value = new Map(m);
+    // откатываем только этот трек, не затирая лайки, поставленные за время запроса
+    const rollback = new Map(likeOverrides.value);
+    rollback.set(track.id, !value);
+    likeOverrides.value = rollback;
     toast(`Не удалось: ${e.message}`);
   }
 }
@@ -345,24 +392,26 @@ audio.addEventListener("ended", () => {
 });
 audio.addEventListener("error", async () => {
   const track = current.value;
+  const s = session;
   if (!track || !audio.src) return;
-  // ссылка могла протухнуть — пробуем получить новую один раз
-  if (!track._retried) {
+  const token = loadToken;
+  // ссылка могла протухнуть — пробуем получить новую один раз за прослушивание
+  if (s && !s.retried) {
+    s.retried = true;
     resolved.delete(track.id);
-    track._retried = true;
     const pos = audio.currentTime;
     try {
       const r = await resolveTrack(track);
+      if (token !== loadToken) return;
       audio.src = r.stream.url;
       audio.currentTime = pos;
       await audio.play();
       return;
     } catch {
-      // упадём в пропуск ниже
+      if (token !== loadToken) return;
     }
   }
-  toast(`Ошибка воспроизведения «${track.title}», переключаю`);
-  next({ auto: true });
+  skipUnplayable(`Ошибка воспроизведения «${track.title}», переключаю`);
 });
 
 // ---------- системные медиа-клавиши и SMTC Windows ----------
@@ -381,7 +430,8 @@ function updateMediaSession() {
 
 if ("mediaSession" in navigator) {
   const ms = navigator.mediaSession;
-  ms.setActionHandler("play", () => audio.play());
+  // toggle, а не audio.play(): после перезапуска у <audio> ещё нет src
+  ms.setActionHandler("play", () => toggle());
   ms.setActionHandler("pause", () => audio.pause());
   ms.setActionHandler("nexttrack", () => next());
   ms.setActionHandler("previoustrack", () => prev());
@@ -389,6 +439,9 @@ if ("mediaSession" in navigator) {
   ms.setActionHandler("seekbackward", () => seek(audio.currentTime - 10));
   ms.setActionHandler("seekforward", () => seek(audio.currentTime + 10));
 }
+
+// закрытие окна посреди трека: прослушивание всё равно попадёт в историю и в отчёт Яндексу
+window.addEventListener("pagehide", () => finishSession("skip", { keepalive: true }));
 
 // ---------- восстановление очереди (без автозапуска) ----------
 function persistQueue() {

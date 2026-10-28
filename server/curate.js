@@ -136,7 +136,8 @@ export function curate(candidates, ctx) {
         reject(t, "liked");
         continue;
       }
-      const window = tape.slice(-(s.likedEvery - 1));
+      // likedEvery=1 — без ограничений (slice(-0) вернул бы всю ленту)
+      const window = s.likedEvery > 1 ? tape.slice(-(s.likedEvery - 1)) : [];
       if (window.some((x) => liked.has(x.id))) {
         reject(t, "liked-quota");
         continue;

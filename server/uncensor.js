@@ -10,6 +10,8 @@
 import { normTrack } from "./normalize.js";
 import { baseTitle } from "./curate.js";
 
+const MAX_CACHE = 5000;
+
 export function preferOriginal(track) {
   if (track?.substituted && track.substituted.available) {
     return { ...track.substituted, replacedFrom: track.id, uncensorReason: "substituted" };
@@ -35,16 +37,18 @@ export class Uncensor {
 
   async findExplicitTwin(track) {
     if (this.cache.has(track.id)) return this.cache.get(track.id);
-    let twin = null;
+    let twin;
     try {
       const q = `${track.artists[0]?.name || ""} ${track.title}`;
       const r = await this.api.search(q, "track", 0);
       const list = (r?.tracks?.results || []).map(normTrack).filter(Boolean);
       twin = list.find((c) => isExplicitTwin(track, c)) || null;
     } catch {
-      twin = null;
+      return null; // сетевую ошибку не кэшируем — в следующий раз попробуем снова
     }
     this.cache.set(track.id, twin ? twin.id : null);
+    // кэш ограничен: самые старые записи вытесняются
+    while (this.cache.size > MAX_CACHE) this.cache.delete(this.cache.keys().next().value);
     this.store?.set("uncensorCache", Object.fromEntries(this.cache));
     return twin ? twin.id : null;
   }

@@ -330,7 +330,8 @@ export class Service {
   /** Трек доигран или пропущен: локальная история (анти-повтор) + отчёт Яндексу. */
   async played({ track, from, playedSeconds, durationSeconds, playId }) {
     this.requireAuth();
-    if (playedSeconds >= Math.min(30, durationSeconds * 0.5)) this.history.record(track, songKey(track));
+    // в историю анти-повтора попадает и пропущенное: раз трек промотали, слышать его снова скоро не хочется
+    if (playedSeconds >= 3) this.history.record(track, songKey(track));
     await this.api
       .playAudio({
         trackId: track.id,

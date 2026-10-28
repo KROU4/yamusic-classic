@@ -50,6 +50,7 @@ export class WaveManager {
       description: r.descriptionSeed?.value || null,
     };
     this.stats = { fetched: 0, rejected: {} };
+    this.filling = null; // фоновое дозаполнение прежней станции к новой отношения не имеет
     this.absorb(r.sequence);
     this.feedback("radioStarted", null).catch(() => {});
     await this.fill();
@@ -78,19 +79,23 @@ export class WaveManager {
 
   async fill() {
     const s = this.session;
-    if (!s || this.filling) return this.filling;
-    this.filling = (async () => {
-      for (let i = 0; i < MAX_FETCH_ROUNDS && s.buffer.length < TARGET_BUFFER; i++) {
+    if (!s) return;
+    if (this.filling && this.fillingFor === s) return this.filling;
+    const p = (async () => {
+      for (let i = 0; i < MAX_FETCH_ROUNDS && s.buffer.length < TARGET_BUFFER && this.session === s; i++) {
         const queue = [...this.deps.history.tape.slice(-20).map((t) => t.id), ...s.served].slice(-60);
         const r = await this.deps.api.sessionTracks(s.id, { queue, aiReduced: this.prefs.aiReduced });
+        if (this.session !== s) break;
         if (r.batchId) s.batchId = r.batchId;
         if (!r.sequence?.length) break;
         this.absorb(r.sequence);
       }
     })().finally(() => {
-      this.filling = null;
+      if (this.filling === p) this.filling = null;
     });
-    return this.filling;
+    this.filling = p;
+    this.fillingFor = s;
+    return p;
   }
 
   /** Отдаёт следующие треки и в фоне дозаполняет буфер. */

@@ -31,10 +31,20 @@ export class JsonStore {
 
   saveNow() {
     clearTimeout(this.timer);
-    fs.mkdirSync(path.dirname(this.file), { recursive: true });
-    const tmp = `${this.file}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(this.data));
-    fs.renameSync(tmp, this.file);
+    const json = JSON.stringify(this.data);
+    try {
+      fs.mkdirSync(path.dirname(this.file), { recursive: true });
+      const tmp = `${this.file}.tmp`;
+      fs.writeFileSync(tmp, json);
+      fs.renameSync(tmp, this.file);
+    } catch {
+      // на Windows rename иногда падает с EPERM (антивирус держит файл) — пишем напрямую
+      try {
+        fs.writeFileSync(this.file, json);
+      } catch {
+        // не удалось сохранить — попробуем при следующем изменении, бэкенд не падает
+      }
+    }
   }
 }
 

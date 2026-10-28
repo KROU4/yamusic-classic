@@ -91,6 +91,8 @@ describe("курирование волны", () => {
     const list = [track(1, 1, "a"), track(2, 2, "b"), track(3, 3, "c"), track(4, 4, "d")];
     expect(curate(list, { now, liked, settings: { likedEvery: 0 } }).accepted.map((t) => t.id)).toEqual(["4"]);
     expect(curate(list, { now, liked, settings: { likedEvery: 8 } }).accepted.map((t) => t.id)).toEqual(["1", "4"]);
+    // «Без ограничений» действительно пропускает все лайкнутые
+    expect(curate(list, { now, liked, settings: { likedEvery: 1 } }).accepted.map((t) => t.id)).toEqual(["1", "2", "3", "4"]);
   });
   it("дизлайкнутые и недоступные не проходят, доступный оригинал спасает подменённый трек", () => {
     const sub = track(9, 9, "orig");
