@@ -12,6 +12,7 @@ import { WaveManager, WAVE_SETTINGS } from "./wave.js";
 import { Uncensor } from "./uncensor.js";
 import { getLyrics } from "./lyrics.js";
 import { PlayLog, computeStats } from "./stats.js";
+import { Podcasts } from "./podcasts.js";
 
 export const DEFAULT_PREFS = {
   allowExplicit: true, // don't ask the wave for "clean" output
@@ -63,6 +64,7 @@ export class Service {
     });
     this.cache = new Map();
     this.playlistLocks = new Map(); // kind -> tail of this playlist's edit chain
+    this.podcasts = new Podcasts(this);
   }
 
   get prefs() {
@@ -410,7 +412,7 @@ export class Service {
   }
 
   /** Track finished or skipped: local history (anti-repeat) + report to Yandex. */
-  async played({ track, from, playedSeconds, durationSeconds, playId }) {
+  async played({ track, from, playedSeconds, durationSeconds, playId, endPositionSeconds }) {
     this.requireAuth();
     // skipped tracks also go into the anti-repeat history: if a track was skipped, the user doesn't want to hear it again soon
     if (playedSeconds >= 3) {
@@ -424,7 +426,8 @@ export class Service {
         from,
         playId: playId || crypto.randomUUID(),
         totalPlayedSeconds: Math.round(playedSeconds),
-        endPositionSeconds: Math.round(playedSeconds),
+        // episodes report the player position (they resume mid-way); music keeps the old played-seconds value
+        endPositionSeconds: Math.round(Number.isFinite(endPositionSeconds) ? endPositionSeconds : playedSeconds),
         trackLengthSeconds: Math.round(durationSeconds),
       })
       .catch((e) => this.log("play-audio failed", e.message));

@@ -47,6 +47,8 @@ const PATHS = {
   chevronRight: "M8.6 6.4 10 5l7 7-7 7-1.4-1.4 5.6-5.6z",
   sidebar: "M3 4h18v16H3zm2 2v12h4V6zm6 0v12h8V6z",
   eq: "M5 4h2v6h2v2H7v8H5v-8H3v-2h2zm6 0h2v10h2v2h-2v4h-2v-4H9v-2h2zm6 0h2v4h2v2h-2v10h-2V10h-2V8h2z",
+  mic: "M12 2.5a3.5 3.5 0 0 1 3.5 3.5v5.5a3.5 3.5 0 0 1-7 0V6A3.5 3.5 0 0 1 12 2.5zm0 2A1.5 1.5 0 0 0 10.5 6v5.5a1.5 1.5 0 0 0 3 0V6A1.5 1.5 0 0 0 12 4.5zM5.5 11h2a4.5 4.5 0 0 0 9 0h2a6.5 6.5 0 0 1-5.5 6.4V20h3v2h-8v-2h3v-2.6A6.5 6.5 0 0 1 5.5 11z",
+  check: "M9.5 16.2 5.3 12l-1.4 1.4 5.6 5.6L20.1 8.4 18.7 7z",
 };
 
 export function Icon({ name, size = 20, class: cls = "", title }) {

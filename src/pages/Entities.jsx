@@ -13,6 +13,7 @@ import { toast } from "../lib/toast.js";
 import { unpin, updatePin } from "../lib/pins.js";
 import { PinButton } from "../components/PinButton.jsx";
 import * as player from "../player/engine.js";
+import { ShowPage } from "./Podcasts.jsx";
 
 function PlayButtons({ tracks, ctx, extra, pin }) {
   return (
@@ -41,6 +42,8 @@ export function AlbumPage({ id }) {
   if (loading && !data) return <Loading />;
   if (error && !data) return <ErrorState error={error} />;
   const { album, tracks } = data;
+  // podcasts and audiobooks get an episode list with dates and progress instead of a track list
+  if (album.type === "podcast" || album.type === "audiobook") return <ShowPage id={id} />;
   const ctx = { title: album.title, link: `/album/${id}`, from: "desktop_win-album-album-default" };
   return (
     <div class="page">
