@@ -10,3 +10,6 @@ token*.txt
 session*.json
 .claude/docker-keep-running
 .omc/
+
+# agent worktrees
+.claude/worktrees/
