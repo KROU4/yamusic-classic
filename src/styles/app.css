@@ -2836,6 +2836,36 @@ kbd {
 }
 .ep-title .t {
   font-weight: 500;
+/* ---------- Ynison: «Устройства» popover ---------- */
+.icon-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--player-bg);
+}
+.popover.ynison-pop {
+  width: 320px;
+  max-width: 320px;
+}
+.ynison-remote {
+  margin: 0 0 6px;
+  padding: 8px 6px 10px;
+  border-radius: var(--radius);
+  background: var(--bg-elev-2);
+}
+.ynison-where {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.ynison-where span {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3214,4 +3244,71 @@ kbd {
 }
 .btn.is-danger {
   color: var(--danger);
+.ynison-track {
+  border-bottom: 0;
+  margin-bottom: 0;
+  padding: 2px 4px 8px;
+}
+.ynison-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.ynison-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  cursor: pointer;
+  overflow: hidden;
+}
+.ynison-bar > div {
+  height: 100%;
+  background: var(--text);
+}
+.ynison-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 2px 0;
+}
+.ynison-take {
+  margin-left: auto;
+}
+.ynison-device {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.ynison-device > .icon {
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.ynison-device.on > .icon,
+.ynison-device.on .ynison-device-note {
+  color: var(--accent);
+}
+.ynison-device.off {
+  opacity: 0.55;
+}
+.ynison-device-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 14px;
+}
+.ynison-device-note {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.ynison-retry {
+  display: block;
+  margin-top: 8px;
 }

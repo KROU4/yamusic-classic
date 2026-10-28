@@ -6,6 +6,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { ApiError } from "./yandex.js";
 import { podcastRoutes } from "./podcasts.js";
+import { ynisonRoutes } from "./ynison.js";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -83,6 +84,7 @@ export function buildRoutes(svc) {
     ["POST", /^\/api\/rooms\/get$/, (q, m, b) => svc.rooms.get(b.ref)],
     ["POST", /^\/api\/rooms\/enter$/, (q, m, b) => svc.rooms.enter(b.ref)],
     ["POST", /^\/api\/rooms\/exit$/, (q, m, b) => svc.rooms.exit(b.ref)],
+    ...(svc.ynison ? ynisonRoutes(svc.ynison) : []),
   ];
 }
 

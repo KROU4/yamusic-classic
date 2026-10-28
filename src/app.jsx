@@ -23,6 +23,7 @@ import { MultivibePage } from "./pages/Multivibe.jsx";
 import { Loading } from "./components/States.jsx";
 import * as player from "./player/engine.js";
 import { loadOverrides } from "./lib/overrides.js";
+import { startYnison } from "./player/ynison.js";
 
 function Page({ me, reconnect }) {
   const { name, params } = route.value;
@@ -84,6 +85,7 @@ export function App() {
     load();
     player.restoreQueue();
     loadOverrides();
+    startYnison(); // only watches the backend; it connects to Yandex only if the setting is on
     // audio settings live on the backend: pull in crossfade and loudness normalization
     api
       .get("/prefs")

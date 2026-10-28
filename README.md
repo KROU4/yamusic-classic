@@ -47,6 +47,10 @@ The user interface is in Russian, like the service it is built for. The code, co
 - A drag-and-drop queue.
 - **My stats**, computed locally: listening time, streak, charts by day and by hour, top artists and top tracks.
 
+**Other devices (Ynison, beta, off by default)**
+- Turn it on in Settings, and the client joins your account's device list: the phone can hand playback over to it and pause, seek or switch tracks here.
+- The «Устройства» button in the player bar shows what plays on your other devices, controls it (play/pause, previous/next, seek) and takes it over with «Слушать здесь» from the same position.
+
 **Windows integration**
 - Thumbnail toolbar buttons, a tray icon showing the current track, and close to tray.
 - Autostart, optionally minimised.
@@ -127,6 +131,7 @@ server/               local backend on 127.0.0.1:47819 (falls back to a free por
   uncensor.js         originals instead of substitutes, explicit twins
   lyrics.js           Yandex and LRCLIB lyrics
   stats.js            local play log and stats
+  ynison.js           Ynison device sync (redirector + state socket, reconnects; wsclient.js is the WebSocket)
 src/                  Preact + signals UI
   player/engine.js    playback, queue, crossfade, sleep timer, wave continuation
   player/audiograph.js  Web Audio graph: per-element gain, EQ, analyser
@@ -139,7 +144,7 @@ Notes on the official client, request signatures, how the censorship works and t
 
 - Audio quality tops out at 192 kbps AAC. The official app gets lossless as an encrypted stream, and this client deliberately does not decrypt it.
 - If a track's audio file was replaced with an edited one on the server, the original cannot be recovered.
-- Podcasts and audiobooks, Ynison (remote control from another device) and offline downloads are not supported.
+- Podcasts and audiobooks and offline downloads are not supported. Ynison is a beta: its message formats follow the official client and open implementations and are tested against a local mock server, but full sync with a real phone is not verified yet.
 - The equalizer and the audio-reactive animation work only in the desktop app. In a plain browser the audio CDN does not allow cross-origin analysis, so the animation falls back to an idle "breathing" mode.
 
 ## License

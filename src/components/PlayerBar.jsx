@@ -8,6 +8,7 @@ import { href } from "../lib/router.js";
 import { nowPlayingOpen } from "../lib/ui.js";
 import { isDesktop, setMini } from "../lib/desktop.js";
 import { EqButton } from "./Equalizer.jsx";
+import { DevicesButton } from "./Devices.jsx";
 import * as p from "../player/engine.js";
 
 export const panel = signal(null); // null | "lyrics" | "queue"
@@ -268,6 +269,7 @@ export function PlayerBar() {
           <Icon name="queue" />
         </button>
         <EqButton />
+        <DevicesButton />
         <SleepTimer />
         {isDesktop && (
           <button class="icon-btn" onClick={() => setMini(true)} aria-label="Мини-плеер" title="Мини-плеер поверх окон">
