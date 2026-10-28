@@ -343,12 +343,16 @@ async function runShots(specFile) {
   await sleep(3000);
   for (const step of steps) {
     try {
-      if (step.hash) await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
+      // порядок: переход → ожидание загрузки страницы → проверка; без перехода — действие → ожидание результата
+      if (step.hash) {
+        await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
+        await sleep(step.wait ?? 1500);
+      }
       if (step.js) {
         const out = await win.webContents.executeJavaScript(`(async () => { ${step.js} })()`);
         if (out !== undefined) log("js:", JSON.stringify(out));
       }
-      await sleep(step.wait ?? 1500);
+      if (!step.hash) await sleep(step.wait ?? 1500);
       if (step.file) {
         fs.writeFileSync(step.file, (await win.webContents.capturePage()).toPNG());
         log("снимок:", path.basename(step.file));

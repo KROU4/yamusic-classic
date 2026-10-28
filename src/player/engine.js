@@ -395,18 +395,27 @@ export async function next({ auto = false, reason } = {}) {
   if (context.value?.type === "wave") {
     const gen = queueGen;
     const ig = intentGen;
+    const cur = queue.value[i];
     await maybeExtendWave();
-    // пока ждали треки, пользователь включил другую очередь или другой трек в этой
-    if (gen !== queueGen || ig !== intentGen || index.value !== i) return;
-    if (i < queue.value.length - 1) return load(i + 1);
+    // пока ждали треки, пользователь включил другую очередь или другой трек в этой.
+    // Сравниваем сам трек, а не позицию: правка очереди выше текущего трека не должна глушить волну
+    const j = queue.value.indexOf(cur);
+    if (gen !== queueGen || ig !== intentGen || j < 0 || j !== index.value) return;
+    if (j < queue.value.length - 1) return load(j + 1);
   }
   if (repeat.value === "all" && queue.value.length) return load(0);
   audio.pause();
   playing.value = false;
 }
 
+/** Элемент уже играет текущий трек (а не ждёт ссылку на новый, оставаясь со старым потоком). */
+const elementIsCurrent = () => !!audio.src && srcTrack === current.value;
+
 export function prev() {
-  if (audio.currentTime > 3 || index.value <= 0) {
+  // пока грузится новый трек, позиция старого элемента ничего не значит — «назад» идёт к предыдущему треку
+  const pos = elementIsCurrent() ? audio.currentTime : 0;
+  if (pos > 3 || index.value <= 0) {
+    if (!elementIsCurrent()) return;
     cancelFade();
     audio.currentTime = 0;
     return;
@@ -446,6 +455,8 @@ export function toggle() {
 
 export function seek(sec) {
   if (!Number.isFinite(sec)) return;
+  // перемотка во время загрузки другого трека задела бы старый поток и отправила бы его позицию в Discord
+  if (!elementIsCurrent()) return;
   cancelFade();
   if (session) session.lastPos = sec;
   audio.currentTime = Math.max(0, Math.min(sec, audio.duration || duration.value));
@@ -530,6 +541,9 @@ export function setSleepTimer(minutes) {
         clearInterval(sleepFadeTimer);
         sleepFadeTimer = null;
         cancelFade(); // кроссфейд не должен пережить затухание и зазвучать на полную после сброса sleepMul
+        // загрузка следующего трека, которая ещё идёт, иначе включит музыку уже после «спокойной ночи»
+        ++loadToken;
+        loading.value = false;
         audio.pause();
         sleepMul = 1;
         applyVolume();
