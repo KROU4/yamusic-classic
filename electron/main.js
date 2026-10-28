@@ -293,6 +293,8 @@ function createWindow(url, key) {
     win.webContents.send("ymc:visibility", win.isVisible() && !win.isMinimized());
   };
   for (const ev of ["show", "hide", "minimize", "restore"]) win.on(ev, sendVisibility);
+  // also once the page has loaded: a window that starts hidden in the tray never fires show/hide
+  win.webContents.on("did-finish-load", sendVisibility);
   // Windows shutdown/logoff: before-quit doesn't arrive, and "minimize to tray" must not block closing
   win.on("session-end", () => {
     quitting = true;

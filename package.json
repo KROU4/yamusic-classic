@@ -8,7 +8,7 @@
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
-    "dev": "node scripts/dev.js",
+    "dev": "vite build && node scripts/dev.js",
     "build": "vite build",
     "serve": "node server/cli.js",
     "start": "vite build && electron .",

@@ -70,7 +70,8 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "${files[@]}" --clobber
           else
-            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" --title "YM Classic $tag" --generate-notes
+            pre=(); [[ "$tag" == *-* ]] && pre=(--prerelease)  # v1.2.0-rc.1 must not become "Latest"
+            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" --title "YM Classic $tag" --generate-notes "${pre[@]}"
           fi
 
       - uses: actions/upload-artifact@v4

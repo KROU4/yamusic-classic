@@ -75,6 +75,7 @@ function build() {
       if (ctx.state !== "running" && ctx.state !== "closed" && anyPlaying()) ctx.resume().catch(() => {});
     };
     graphReady.value = true;
+    idle(); // created at startup: if nothing plays, let the audio thread rest
   } catch {
     ctx = null;
   }
@@ -153,10 +154,36 @@ function applyEq() {
   const g = enabled ? gains : BANDS.map(() => 0);
   const t = ctx.currentTime;
   filters.forEach((f, i) => f.gain.setTargetAtTime(g[i], t, 0.03));
-  // headroom: the strongest boost is compensated to avoid clipping
-  const headroom = Math.max(0, ...g);
-  preamp.gain.setTargetAtTime(10 ** (-headroom / 20), t, 0.03);
+  // headroom: neighbouring bands overlap and their boosts add up, so the peak of the *combined*
+  // response is compensated, not just the largest slider
+  preamp.gain.setTargetAtTime(1 / peakGain(g), t, 0.03);
 }
+
+let probe = null; // unconnected copies of the bands: their response is read without touching the live chain
+const GRID = new Float32Array(Array.from({ length: 160 }, (_, i) => 20 * 1000 ** (i / 159))); // 20 Hz–20 kHz, log
+/** Peak linear gain (≥ 1) of the 10-band chain for the given dB settings. */
+function peakGain(g) {
+  if (!g.some((v) => v > 0)) return 1;
+  probe ||= filters.map((f) => {
+    const b = ctx.createBiquadFilter();
+    b.type = f.type;
+    b.frequency.value = f.frequency.value;
+    b.Q.value = f.Q.value;
+    return b;
+  });
+  const total = new Float32Array(GRID.length).fill(1);
+  const mag = new Float32Array(GRID.length);
+  const phase = new Float32Array(GRID.length);
+  probe.forEach((b, i) => {
+    b.gain.value = g[i];
+    b.getFrequencyResponse(GRID, mag, phase);
+    for (let k = 0; k < GRID.length; k++) total[k] *= mag[k];
+  });
+  return Math.max(1, ...total);
+}
+
+/** For smoke tests: preamp gain and context state. */
+export const debugInfo = () => ({ preamp: preamp?.gain.value ?? null, state: ctx?.state ?? null });
 
 export function setEq(patch) {
   const next = { ...eq.value, ...patch };

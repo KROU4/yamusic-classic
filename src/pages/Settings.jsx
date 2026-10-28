@@ -193,6 +193,7 @@ export function SettingsPage({ me, onReconnect }) {
           hint="Для подкастов и аудиокниг; высота голоса не меняется"
           value={player.rate.value}
           options={[
+            [0.5, "0,5×"],
             [0.75, "0,75×"],
             [1, "1×"],
             [1.25, "1,25×"],

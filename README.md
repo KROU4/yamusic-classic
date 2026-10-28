@@ -83,7 +83,7 @@ npm start
 | Command | What it does |
 |---|---|
 | `npm start` | Builds the UI and opens the Electron window |
-| `npm run dev` | Backend and UI without Electron. The URL, including its key, is printed to the console |
+| `npm run dev` | Builds the UI and serves it with the backend, without Electron, for a regular browser. The URL, including its key, is printed to the console (no EQ or audio-reactive animation in a browser) |
 | `npm test` | Unit tests: signatures, session lookup, anti-repeat rules, LRC, uncensor, HTTP hardening, stats, pins |
 | `npm run dist` | Builds the installer and the portable exe into `release/` |
 | `node scripts/smoke.js` | Live backend check against your own session. It prints summaries only, never the token |

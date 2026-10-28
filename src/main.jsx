@@ -1,7 +1,7 @@
 import { render } from "preact";
 import "./lib/api.js"; // first: grabs the launch key from the address
 import "./lib/theme.js";
-import { isDesktop, stepZoom } from "./lib/desktop.js";
+import { isDesktop, stepZoom, mini } from "./lib/desktop.js";
 import "./styles/app.css";
 import { App } from "./app.jsx";
 import { shortcutsOpen } from "./lib/ui.js";
@@ -37,6 +37,7 @@ window.addEventListener("keydown", (e) => {
   if (["INPUT", "TEXTAREA", "SELECT"].includes(el?.tagName) || el?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
   // "?" is Shift+7 in the Russian layout, so match the typed character as well as the physical key
   if (e.key === "?" || (e.code === "Slash" && e.shiftKey)) {
+    if (mini.peek()) return; // the mini player has no room for the help
     shortcutsOpen.value = !shortcutsOpen.value;
     return;
   }

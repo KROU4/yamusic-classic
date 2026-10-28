@@ -8,7 +8,7 @@ import { artistNames } from "../lib/format.js";
 import { isPinned, togglePin } from "../lib/pins.js";
 import { toast } from "../lib/toast.js";
 import { nowPlayingOpen } from "../lib/ui.js";
-import { waveSettings, setWaveSettings, DEFAULT_WAVE_SETTINGS as DEFAULT_SETTINGS } from "../player/waveState.js";
+import { waveSettings, setWaveSettings, editWaveSettings, sameWaveSettings, DEFAULT_WAVE_SETTINGS as DEFAULT_SETTINGS } from "../player/waveState.js";
 import * as p from "../player/engine.js";
 
 export { DEFAULT_SETTINGS };
@@ -79,7 +79,8 @@ function Settings({ onClose }) {
     clearTimeout(timer.current);
     const next = pending.current;
     pending.current = null;
-    if (next) p.playWave({ settings: next });
+    // paused in the meantime: keep the choice, the big button starts the wave with it
+    if (next && p.playing.peek()) p.playWave({ settings: next });
   };
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -96,7 +97,7 @@ function Settings({ onClose }) {
   // as in the original: a choice rebuilds the playing wave right away (with a delay in case of several clicks in a row).
   // A paused wave is not started by a chip click: the choice is kept and «Слушать» starts it
   const set = (next) => {
-    setWaveSettings(next);
+    editWaveSettings(next);
     clearTimeout(timer.current);
     pending.current = null;
     if (waveOn && p.playing.peek()) {
@@ -170,7 +171,8 @@ export function WaveHero() {
     prevLiked.current = liked;
     prevId.current = t?.id;
   }, [liked, t?.id]);
-  const start = () => (isWave ? p.toggle() : p.playWave({ settings: s || undefined }));
+  // a paused wave whose settings were changed since it started is restarted with the new ones, not resumed
+  const start = () => (isWave && (p.playing.peek() || !s || sameWaveSettings(s, ctx.settings)) ? p.toggle() : p.playWave({ settings: s || undefined }));
   return (
     <section class={`vibe ${active ? "is-active" : ""} ${open ? "is-tuning" : ""}`}>
       {/* under the full-screen Now Playing the hero is hidden — one WebGL loop at a time */}

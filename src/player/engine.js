@@ -5,7 +5,7 @@ import { api } from "../lib/api.js";
 import { artistNames } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
 import * as graph from "./audiograph.js";
-import { setWaveSettings } from "./waveState.js";
+import { setWaveSettings, waveEdits, DEFAULT_WAVE_SETTINGS } from "./waveState.js";
 
 const LS = {
   get(key, fallback) {
@@ -257,7 +257,8 @@ async function load(i, { autoplay = true } = {}) {
  * Logically we switch to the next track immediately; the old element just plays out its tail.
  */
 function startCrossfade() {
-  const seconds = audioConfig.value.crossfade;
+  // the fade starts when `crossfade` seconds of *media* time remain; at 1.5× that is less wall-clock time
+  const seconds = audioConfig.value.crossfade / (rate.value || 1);
   const i = index.value + 1;
   const nextTrack = queue.value[i];
   if (!nextTrack || !playable(nextTrack) || !isFresh(nextTrack.id)) return false;
@@ -341,12 +342,20 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
   // auto-advance or a crossfade during the request must not cancel a click on the wave
   ++loadToken;
   const gen = ++intentGen;
+  const edits = waveEdits.gen; // settings chips touched after this point win over what this start reports
+  const isMyWave = stationId === "user:onyourwave";
+  // a failed restart leaves the previous wave playing: the settings UI goes back to what is really playing
+  const rollback = () => {
+    const ctx = context.peek();
+    if (isMyWave && waveEdits.gen === edits && ctx?.type === "wave" && ctx.stationId === stationId && ctx.settings) setWaveSettings(ctx.settings);
+  };
   loading.value = true;
   try {
     const r = await api.post("/wave/start", { stationId, settings });
     if (gen !== intentGen) return; // while waiting, the user started something else
     if (!r.tracks?.length) {
       loading.value = false;
+      rollback();
       toast("Волна ничего не нашла — ослабьте фильтры анти-повтора в настройках");
       return;
     }
@@ -357,16 +366,19 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
     waveFetching = null;
     // the server reports the settings it really used (saved ones when none were passed) — the hero,
     // pins and Now Playing follow them instead of a stale local copy
-    const used = r.wave?.settings || settings || null;
+    // (normalized: older saved settings may lack newer keys such as activity, and pin keys compare all four)
+    const raw = r.wave?.settings || settings;
+    const used = raw ? { ...DEFAULT_WAVE_SETTINGS, ...raw } : null;
     batch(() => {
       queue.value = r.tracks;
       context.value = { type: "wave", title, stationId, settings: used, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
-      if (stationId === "user:onyourwave" && used) setWaveSettings(used);
+      if (isMyWave && used && waveEdits.gen === edits) setWaveSettings(used);
     });
     return load(0);
   } catch (e) {
     if (gen !== intentGen) return;
     loading.value = false;
+    rollback();
     if (e.status === 401) authError.value = true;
     toast(`Волна не запустилась: ${e.message}`);
   }
@@ -816,4 +828,4 @@ export function restoreQueue() {
 export const currentTime = () => audio.currentTime;
 
 // diagnostics for smoke tests: whether a crossfade is running and at what volume both tracks sound
-window.__ymcDebug = () => ({ graph: graph.graphReady.value, levels: graph.levels(), fading: !!fade, oldVolume: fade ? graph.getVolume(fade.old) : null, volume: graph.getVolume(audio), fadeMul });
+window.__ymcDebug = () => ({ graph: graph.graphReady.value, levels: graph.levels(), ...graph.debugInfo(), fading: !!fade, oldVolume: fade ? graph.getVolume(fade.old) : null, volume: graph.getVolume(audio), fadeMul });

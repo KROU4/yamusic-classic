@@ -41,9 +41,14 @@ export function Shortcuts() {
   const open = shortcutsOpen.value;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === "Escape" && (shortcutsOpen.value = false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // capture + stop: Esc closes only the help, not Now Playing or the wave panel underneath
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      shortcutsOpen.value = false;
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [open]);
   if (!open) return null;
   const groups = isDesktop ? [...GROUPS, DESKTOP] : GROUPS;

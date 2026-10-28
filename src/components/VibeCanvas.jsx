@@ -1,7 +1,7 @@
 // Generative animation for My Wave: soft flowing colors and expanding ripples.
 // Custom WebGL shader; reacts to music via the audio graph analyzer, colors follow the wave's mood.
 // Modes: full (shader), lite (light CSS animation), off (static gradient). Without WebGL — lite.
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { vibeMode } from "../lib/ui.js";
 import { windowVisible } from "../lib/desktop.js";
 import * as graph from "../player/audiograph.js";
@@ -231,11 +231,13 @@ export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
   const ref = useRef(null);
   const state = useRef({});
   const ctrl = useRef(null);
+  // per instance: another canvas failing must not swap this one to lite under a live render loop
+  const [broken, setBroken] = useState(glBroken);
   const mode = reducedMotion.matches && vibeMode.value === "full" ? "lite" : vibeMode.value;
   state.current = { colors, playing: !!active && p.playing.value, pulseAt, paused };
 
   useEffect(() => {
-    if (mode !== "full" || glBroken || !ref.current) return;
+    if (mode !== "full" || broken || !ref.current) return;
     try {
       const c = startGl(ref.current, () => state.current);
       if (c) {
@@ -249,8 +251,8 @@ export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
       // the shader failed to build on this GPU — the light animation remains
     }
     glBroken = true;
-    ref.current?.classList.add("vibe-fallback");
-  }, [mode]);
+    setBroken(true);
+  }, [mode, broken]);
 
   // resuming after the cover (Now Playing) is closed
   useEffect(() => {
@@ -258,16 +260,10 @@ export function VibeCanvas({ colors, active, pulseAt, paused = false }) {
   }, [paused]);
 
   const style = { "--c0": colors[0], "--c1": colors[1], "--c2": colors[2] };
-  if (mode === "full" && !glBroken)
+  if (mode === "full" && !broken)
     return (
       <div class={`vibe-canvas ${active && p.playing.value ? "is-playing" : ""}`} style={style} aria-hidden="true">
         <canvas ref={ref} />
-        {/* fallback: visible only if the shader failed to build (the canvas gets .vibe-fallback) */}
-        <div class="vibe-lite">
-          <i />
-          <i />
-          <i />
-        </div>
       </div>
     );
   return (
