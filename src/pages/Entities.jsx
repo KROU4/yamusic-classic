@@ -10,9 +10,11 @@ import { Icon } from "../components/Icon.jsx";
 import { href, go } from "../lib/router.js";
 import { plural, totalDuration, ALBUM_TYPES } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
+import { unpin } from "../lib/pins.js";
+import { PinButton } from "../components/PinButton.jsx";
 import * as player from "../player/engine.js";
 
-function PlayButtons({ tracks, ctx, extra }) {
+function PlayButtons({ tracks, ctx, extra, pin }) {
   return (
     <>
       <button class="btn primary" onClick={() => player.playList(tracks, 0, ctx)} disabled={!tracks.length}>
@@ -28,6 +30,7 @@ function PlayButtons({ tracks, ctx, extra }) {
       >
         <Icon name="shuffle" size={18} /> Вперемешку
       </button>
+      {pin && <PinButton pin={pin} />}
       {extra}
     </>
   );
@@ -49,7 +52,7 @@ export function AlbumPage({ id }) {
             {album.title} {album.version && <span class="muted">{album.version}</span>} {album.explicit && <ExplicitBadge />}
           </>
         }
-        actions={<PlayButtons tracks={tracks} ctx={ctx} />}
+        actions={<PlayButtons tracks={tracks} ctx={ctx} pin={{ type: "album", id: String(id), title: album.title, cover: album.cover || null }} />}
       >
         <div class="page-meta">
           {album.artists.map((a, i) => (
@@ -100,6 +103,7 @@ export function ArtistPage({ id }) {
                 <Icon name="wave" size={18} /> Волна по исполнителю
               </button>
             }
+            pin={{ type: "artist", id: String(id), title: artist.name, cover: artist.cover || null }}
           />
         }
       >
@@ -163,6 +167,7 @@ export function PlaylistPage({ uid, kind }) {
     try {
       await api.post(`/my/playlists/${kind}/delete`);
       dropCache("/collection");
+      unpin({ type: "playlist", uid: String(uid), kind: String(kind) });
       toast("Плейлист удалён");
       go("/collection/playlists");
     } catch (e) {
@@ -180,7 +185,9 @@ export function PlaylistPage({ uid, kind }) {
             tracks={tracks}
             ctx={ctx}
             extra={
-              own && (
+              <>
+                <PinButton pin={{ type: "playlist", uid: String(uid), kind: String(kind), title: playlist.title, cover: playlist.cover || null }} />
+                {own && (
                 <>
                   <button class="icon-btn" onClick={rename} aria-label="Переименовать" title="Переименовать">
                     <Icon name="edit" />
@@ -189,7 +196,8 @@ export function PlaylistPage({ uid, kind }) {
                     <Icon name="trash" />
                   </button>
                 </>
-              )
+                )}
+              </>
             }
           />
         }

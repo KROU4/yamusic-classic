@@ -4,10 +4,12 @@ import { api } from "./lib/api.js";
 import { toasts } from "./lib/toast.js";
 import { me as meSignal } from "./lib/session.js";
 import { mini } from "./lib/desktop.js";
-import { Header } from "./components/Header.jsx";
+import { Topbar } from "./components/Header.jsx";
+import { Sidebar } from "./components/Sidebar.jsx";
 import { PlayerBar } from "./components/PlayerBar.jsx";
 import { SidePanel } from "./components/SidePanels.jsx";
 import { ContextMenu } from "./components/ContextMenu.jsx";
+import { Shortcuts } from "./components/Shortcuts.jsx";
 import { NowPlaying } from "./components/NowPlaying.jsx";
 import { MiniPlayer } from "./components/MiniPlayer.jsx";
 import { Home } from "./pages/Home.jsx";
@@ -99,9 +101,10 @@ export function App() {
     );
   return (
     <div class="layout">
-      <Header me={me} />
+      <Sidebar me={me} />
       <div class="body">
         <main class="main" id="main">
+          <Topbar />
           <Page me={me} reconnect={reconnect} />
         </main>
         <SidePanel />
@@ -109,6 +112,7 @@ export function App() {
       <PlayerBar />
       <NowPlaying />
       <ContextMenu />
+      <Shortcuts />
       <div class="toasts" aria-live="polite">
         {toasts.value.map((t) => (
           <div key={t.id} class="toast">

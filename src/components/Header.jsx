@@ -1,16 +1,8 @@
-// Шапка классической Яндекс Музыки: логотип, разделы вкладками, поиск.
+// Верхняя панель: навигация назад/вперёд и поиск с подсказками.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
-import { route, go, href } from "../lib/router.js";
+import { route, go } from "../lib/router.js";
 import { api } from "../lib/api.js";
-
-const TABS = [
-  ["home", "/", "Главное"],
-  ["radio", "/radio", "Радио"],
-  ["chart", "/chart", "Чарт"],
-  ["new", "/new", "Новинки"],
-  ["collection", "/collection", "Коллекция"],
-];
 
 function Search() {
   const initial = route.value.name === "search" ? route.value.params.q || "" : "";
@@ -85,38 +77,19 @@ function Search() {
   );
 }
 
-export function Header({ me }) {
-  const name = route.value.name;
+/** Верхняя панель над страницей: назад/вперёд и поиск. Разделы и профиль — в боковом меню. */
+export function Topbar() {
   return (
-    <header class="header">
-      <a class="logo" href={href("/")} aria-label="Главная">
-        <span class="logo-mark">
-          <Icon name="play" size={14} />
-        </span>
-        <span class="logo-text">
-          Музыка <small>classic</small>
-        </span>
-      </a>
-      <nav class="tabs" aria-label="Разделы">
-        {TABS.map(([key, path, label]) => (
-          <a key={key} href={href(path)} class={name === key ? "on" : ""} aria-current={name === key ? "page" : undefined}>
-            {label}
-          </a>
-        ))}
-      </nav>
+    <div class="topbar">
+      <div class="topbar-nav">
+        <button class="icon-btn" onClick={() => history.back()} aria-label="Назад" title="Назад (Alt+←)">
+          <Icon name="chevronLeft" size={22} />
+        </button>
+        <button class="icon-btn" onClick={() => history.forward()} aria-label="Вперёд" title="Вперёд (Alt+→)">
+          <Icon name="chevronRight" size={22} />
+        </button>
+      </div>
       <Search />
-      <a class={`icon-btn ${name === "stats" ? "on" : ""}`} href={href("/stats")} aria-label="Моя статистика" title="Моя статистика">
-        <Icon name="stats" />
-      </a>
-      <a class={`icon-btn header-settings ${name === "settings" ? "on" : ""}`} href={href("/settings")} aria-label="Настройки" title="Настройки">
-        <Icon name="settings" />
-      </a>
-      {me?.authorized && (
-        <a class="avatar" href={href("/settings")} title={`${me.name}${me.hasPlus ? " · Плюс" : ""}`}>
-          {(me.name || "?").slice(0, 1).toUpperCase()}
-          {me.hasPlus && <span class="plus-dot" />}
-        </a>
-      )}
-    </header>
+    </div>
   );
 }

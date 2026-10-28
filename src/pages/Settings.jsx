@@ -3,8 +3,10 @@ import { useEffect, useState } from "preact/hooks";
 import { api, dropCache } from "../lib/api.js";
 import { toast } from "../lib/toast.js";
 import { theme, setTheme } from "../lib/theme.js";
-import { isDesktop } from "../lib/desktop.js";
+import { isDesktop, zoom, setZoom, ZOOM_STEPS } from "../lib/desktop.js";
+import { vibeMode, shortcutsOpen } from "../lib/ui.js";
 import { Loading } from "../components/States.jsx";
+import { EqPanel } from "../components/Equalizer.jsx";
 import * as player from "../player/engine.js";
 
 function Toggle({ label, hint, checked, onChange }) {
@@ -186,6 +188,22 @@ export function SettingsPage({ me, onReconnect }) {
             player.setAudioConfig({ normalize: v });
           }}
         />
+        <Choice
+          label="Скорость воспроизведения"
+          hint="Для подкастов и аудиокниг; высота голоса не меняется"
+          value={player.rate.value}
+          options={[
+            [0.75, "0,75×"],
+            [1, "1×"],
+            [1.25, "1,25×"],
+            [1.5, "1,5×"],
+            [2, "2×"],
+          ]}
+          onChange={player.setRate}
+        />
+        <div class="setting column">
+          <EqPanel />
+        </div>
       </section>
 
       {isDesktop && (
@@ -215,6 +233,35 @@ export function SettingsPage({ me, onReconnect }) {
           ]}
           onChange={setTheme}
         />
+        <Choice
+          label="Анимация «Моей волны»"
+          hint="Полная реагирует на музыку; облегчённая почти не нагружает видеокарту"
+          value={vibeMode.value}
+          options={[
+            ["full", "Полная"],
+            ["lite", "Облегчённая"],
+            ["off", "Без анимации"],
+          ]}
+          onChange={(v) => (vibeMode.value = v)}
+        />
+        {isDesktop && (
+          <Choice
+            label="Масштаб интерфейса"
+            hint="Также Ctrl + плюс / минус, Ctrl+0 — сбросить"
+            value={zoom.value}
+            options={ZOOM_STEPS.map((z) => [z, `${Math.round(z * 100)}%`])}
+            onChange={setZoom}
+          />
+        )}
+        <div class="setting">
+          <span class="setting-text">
+            <span class="setting-label">Горячие клавиши</span>
+            <span class="setting-hint">Список всех сочетаний — также по клавише «?»</span>
+          </span>
+          <button class="btn ghost" onClick={() => (shortcutsOpen.value = true)}>
+            Показать
+          </button>
+        </div>
       </section>
 
       <section class="settings-group">

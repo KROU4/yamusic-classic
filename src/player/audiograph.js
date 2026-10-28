@@ -173,8 +173,10 @@ export function levels() {
   analyser.getByteFrequencyData(freq);
   const hz = ctx.sampleRate / analyser.fftSize; // ширина одного бина
   const bin = (f) => Math.min(freq.length, Math.max(1, Math.round(f / hz)));
-  const bass = avg(freq, bin(30), bin(160));
-  const mid = avg(freq, bin(160), bin(2000));
-  const high = avg(freq, bin(2000), bin(9000));
+  // сырые средние у громкого мастеринга почти всегда у потолка — растягиваем рабочий диапазон
+  const norm = (v, floor, top) => Math.max(0, Math.min(1, (v - floor) / (top - floor)));
+  const bass = norm(avg(freq, bin(30), bin(160)), 0.35, 0.98);
+  const mid = norm(avg(freq, bin(160), bin(2000)), 0.2, 0.8);
+  const high = norm(avg(freq, bin(2000), bin(9000)), 0.05, 0.55);
   return { bass, mid, high, energy: bass * 0.55 + mid * 0.3 + high * 0.15 };
 }

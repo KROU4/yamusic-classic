@@ -6,6 +6,7 @@ import { Progress, Volume } from "./PlayerBar.jsx";
 import { Lyrics } from "./SidePanels.jsx";
 import { ExplicitBadge, Artists } from "./TrackList.jsx";
 import { openTrackMenu, menu } from "./ContextMenu.jsx";
+import { VibeCanvas, paletteFor } from "./VibeCanvas.jsx";
 import { seconds } from "../lib/format.js";
 import * as p from "../player/engine.js";
 
@@ -37,10 +38,13 @@ export function NowPlaying() {
   if (!open || !t) return null;
   const liked = p.isLiked(t);
   const cover = bigCover(t.cover);
+  const ctx = p.context.value;
   return (
     <div class="np" role="dialog" aria-label="Сейчас играет" style={{ "--np-accent": t.color || "#333" }}>
       <div class="np-bg" style={cover ? { backgroundImage: `url(${cover})` } : undefined} />
       <div class="np-shade" />
+      {/* во время волны за обложкой живёт её анимация */}
+      {ctx?.type === "wave" && <VibeCanvas colors={paletteFor(ctx.settings)} active />}
       <button class="icon-btn np-close" onClick={() => (nowPlayingOpen.value = false)} aria-label="Свернуть" title="Свернуть (Esc)">
         <Icon name="down" size={22} />
       </button>

@@ -1,4 +1,4 @@
-// Нижняя панель плеера в духе классической Яндекс Музыки.
+// Нижняя панель плеера: трек слева, управление и прогресс по центру, дополнительные кнопки справа.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
@@ -7,6 +7,7 @@ import { seconds } from "../lib/format.js";
 import { href } from "../lib/router.js";
 import { nowPlayingOpen } from "../lib/ui.js";
 import { isDesktop, setMini } from "../lib/desktop.js";
+import { EqButton } from "./Equalizer.jsx";
 import * as p from "../player/engine.js";
 
 export const panel = signal(null); // null | "lyrics" | "queue"
@@ -175,85 +176,96 @@ export function PlayerBar() {
   const liked = p.isLiked(t);
   return (
     <footer class={`player ${t ? "" : "is-empty"}`}>
-      <Progress />
-      <div class="player-inner">
+      <div class="player-track">
+        {t ? (
+          <>
+            <button class="player-cover" onClick={() => (nowPlayingOpen.value = true)} aria-label="Открыть «Сейчас играет»" title="Сейчас играет">
+              {t.cover ? <img src={t.cover} alt="" /> : <div class="ph" />}
+              <span class="player-cover-hint">
+                <Icon name="expand" size={18} />
+              </span>
+            </button>
+            <div class="player-meta">
+              <div class="player-title">
+                <span class="t">{t.title}</span>
+                {t.version && <span class="v">{t.version}</span>}
+                {t.explicit && <ExplicitBadge />}
+              </div>
+              <Artists track={t} />
+            </div>
+            <button class={`icon-btn like ${liked ? "on" : ""}`} onClick={() => p.like(t)} aria-label="Мне нравится">
+              <Icon name={liked ? "heart" : "heartOutline"} />
+            </button>
+            <button class={`icon-btn ${p.isDisliked(t) ? "on-bad" : ""}`} onClick={() => p.dislike(t)} aria-label="Не нравится" title="Не нравится — и не предлагать">
+              <Icon name="ban" />
+            </button>
+          </>
+        ) : (
+          <div class="player-hint">Включите «Мою волну» или любой трек</div>
+        )}
+      </div>
+
+      <div class="player-center">
         <div class="player-controls">
+          <button class={`icon-btn ${p.shuffle.value ? "on" : ""}`} onClick={p.toggleShuffle} aria-label="Перемешать" title="Перемешивать">
+            <Icon name="shuffle" />
+          </button>
           <button class="icon-btn" onClick={p.prev} aria-label="Предыдущий" disabled={!t}>
-            <Icon name="prev" size={22} />
+            <Icon name="prev" size={24} />
           </button>
           <button class="play-main" onClick={() => (t ? p.toggle() : p.playWave())} aria-label={p.playing.value ? "Пауза" : "Играть"}>
             {p.loading.value && !p.playing.value ? <span class="spinner" /> : <Icon name={p.playing.value ? "pause" : "play"} size={24} />}
           </button>
           <button class="icon-btn" onClick={() => p.next()} aria-label="Следующий" disabled={!t}>
-            <Icon name="next" size={22} />
+            <Icon name="next" size={24} />
           </button>
-        </div>
-
-        <div class="player-track">
-          {t ? (
-            <>
-              <button class="player-cover" onClick={() => (nowPlayingOpen.value = true)} aria-label="Открыть «Сейчас играет»" title="Сейчас играет">
-                {t.cover ? <img src={t.cover} alt="" /> : <div class="ph" />}
-                <span class="player-cover-hint">
-                  <Icon name="expand" size={18} />
-                </span>
-              </button>
-              <div class="player-meta">
-                <div class="player-title">
-                  <span class="t">{t.title}</span>
-                  {t.version && <span class="v">{t.version}</span>}
-                  {t.explicit && <ExplicitBadge />}
-                </div>
-                <Artists track={t} />
-              </div>
-              <button class={`icon-btn like ${liked ? "on" : ""}`} onClick={() => p.like(t)} aria-label="Мне нравится">
-                <Icon name={liked ? "heart" : "heartOutline"} />
-              </button>
-              <button class={`icon-btn ${p.isDisliked(t) ? "on-bad" : ""}`} onClick={() => p.dislike(t)} aria-label="Не нравится" title="Не нравится — и не предлагать">
-                <Icon name="ban" />
-              </button>
-            </>
-          ) : (
-            <div class="player-hint">Включите «Мою волну» или любой трек</div>
-          )}
-        </div>
-
-        <div class="player-time">
-          {t ? `${seconds(p.position.value)} / ${seconds(p.duration.value)}` : ""}
-        </div>
-
-        <div class="player-extra">
-          {ctx && (
-            <span class="player-ctx" title={ctx.title}>
-              {ctx.type === "wave" ? <Icon name="wave" size={16} /> : null}
-              {ctx.link ? <a href={href(ctx.link)}>{ctx.title}</a> : ctx.title}
-            </span>
-          )}
-          {st && (
-            <span class="player-quality" title={`${st.codec}, ${st.bitrate} кбит/с`}>
-              {st.codec === "flac" || st.codec === "flac-mp4" ? "FLAC" : `${st.bitrate}`}
-            </span>
-          )}
-          <button class={`icon-btn ${p.shuffle.value ? "on" : ""}`} onClick={p.toggleShuffle} aria-label="Перемешать" title="Перемешивать">
-            <Icon name="shuffle" />
-          </button>
-          <button class={`icon-btn ${p.repeat.value !== "none" ? "on" : ""}`} onClick={p.cycleRepeat} aria-label="Повтор" title={{ none: "Повтор выключен", all: "Повторять всё", one: "Повторять трек" }[p.repeat.value]}>
+          <button
+            class={`icon-btn ${p.repeat.value !== "none" ? "on" : ""}`}
+            onClick={p.cycleRepeat}
+            aria-label="Повтор"
+            title={{ none: "Повтор выключен", all: "Повторять всё", one: "Повторять трек" }[p.repeat.value]}
+          >
             <Icon name={p.repeat.value === "one" ? "repeatOne" : "repeat"} />
           </button>
-          <button class={`icon-btn ${panel.value === "lyrics" ? "on" : ""}`} onClick={() => togglePanel("lyrics")} aria-label="Текст песни" title="Текст песни" disabled={!t}>
-            <Icon name="lyrics" />
-          </button>
-          <button class={`icon-btn ${panel.value === "queue" ? "on" : ""}`} onClick={() => togglePanel("queue")} aria-label="Очередь" title="Очередь">
-            <Icon name="queue" />
-          </button>
-          <SleepTimer />
-          {isDesktop && (
-            <button class="icon-btn" onClick={() => setMini(true)} aria-label="Мини-плеер" title="Мини-плеер поверх окон">
-              <Icon name="mini" />
-            </button>
-          )}
-          <Volume />
         </div>
+        <div class="player-progress">
+          <span class="player-time">{t ? seconds(p.position.value) : ""}</span>
+          <Progress />
+          <span class="player-time end">{t ? seconds(p.duration.value) : ""}</span>
+        </div>
+      </div>
+
+      <div class="player-extra">
+        {ctx && (
+          <span class="player-ctx" title={ctx.title}>
+            {ctx.type === "wave" ? <Icon name="wave" size={16} /> : null}
+            {ctx.link ? <a href={href(ctx.link)}>{ctx.title}</a> : ctx.title}
+          </span>
+        )}
+        {st && (
+          <span class="player-quality" title={`${st.codec}, ${st.bitrate} кбит/с`}>
+            {st.codec === "flac" || st.codec === "flac-mp4" ? "FLAC" : `${st.bitrate}`}
+          </span>
+        )}
+        {p.rate.value !== 1 && (
+          <button class="player-quality rate" onClick={() => p.setRate(1)} title="Скорость воспроизведения. Нажмите, чтобы вернуть обычную">
+            {String(p.rate.value).replace(".", ",")}×
+          </button>
+        )}
+        <button class={`icon-btn ${panel.value === "lyrics" ? "on" : ""}`} onClick={() => togglePanel("lyrics")} aria-label="Текст песни" title="Текст песни" disabled={!t}>
+          <Icon name="lyrics" />
+        </button>
+        <button class={`icon-btn ${panel.value === "queue" ? "on" : ""}`} onClick={() => togglePanel("queue")} aria-label="Очередь" title="Очередь">
+          <Icon name="queue" />
+        </button>
+        <EqButton />
+        <SleepTimer />
+        {isDesktop && (
+          <button class="icon-btn" onClick={() => setMini(true)} aria-label="Мини-плеер" title="Мини-плеер поверх окон">
+            <Icon name="mini" />
+          </button>
+        )}
+        <Volume />
       </div>
     </footer>
   );

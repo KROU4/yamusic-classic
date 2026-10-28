@@ -43,6 +43,8 @@ export const authError = signal(false);
 export const audioConfig = signal({ crossfade: LS.get("ymc-crossfade", 0), normalize: LS.get("ymc-normalize", false) });
 // Таймер сна: null | { mode: "time", at } | { mode: "track" }
 export const sleepTimer = signal(null);
+/** Скорость воспроизведения (подкасты, аудиокниги); высота голоса сохраняется. */
+export const rate = signal(LS.get("ymc-rate", 1));
 // Счётчик перемоток: оболочка (трей, панель задач) переотправляет состояние после seek
 export const seekGen = signal(0);
 
@@ -75,6 +77,8 @@ function createElement() {
   const el = new Audio();
   el.preload = "auto";
   graph.prepare(el); // CORS-режим и подключение к эквалайзеру — до первого src
+  // defaultPlaybackRate переживает смену src (загрузка сбрасывает playbackRate к нему)
+  el.defaultPlaybackRate = el.playbackRate = rate.value;
   attachListeners(el);
   return el;
 }
@@ -350,7 +354,7 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
     waveFetching = null;
     batch(() => {
       queue.value = r.tracks;
-      context.value = { type: "wave", title, stationId, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
+      context.value = { type: "wave", title, stationId, settings: settings || null, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
     });
     return load(0);
   } catch (e) {
@@ -502,6 +506,13 @@ export function setAudioConfig(patch) {
   LS.set("ymc-crossfade", audioConfig.value.crossfade);
   LS.set("ymc-normalize", audioConfig.value.normalize);
   applyVolume();
+}
+
+export function setRate(v) {
+  const r = Math.max(0.5, Math.min(2, Math.round(v * 100) / 100));
+  rate.value = r;
+  for (const el of [audio, fade?.old]) if (el) el.defaultPlaybackRate = el.playbackRate = r;
+  LS.set("ymc-rate", r);
 }
 
 // ---------- таймер сна ----------
@@ -689,7 +700,7 @@ function attachListeners(el) {
     if (xf > 0 && !fade && !sleepFadeTimer && !el.paused && repeat.value !== "one" && sleepTimer.value?.mode !== "track" && dur > xf * 3 && dur - t <= xf) startCrossfade();
     if ("mediaSession" in navigator && Number.isFinite(el.duration)) {
       try {
-        navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(t, el.duration), playbackRate: 1 });
+        navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(t, el.duration), playbackRate: rate.value });
       } catch {
         // позиция может быть невалидной во время перемотки
       }

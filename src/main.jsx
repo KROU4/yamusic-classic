@@ -1,10 +1,32 @@
 import { render } from "preact";
 import "./lib/api.js"; // первым: забирает ключ запуска из адреса
 import "./lib/theme.js";
-import "./lib/desktop.js";
+import { isDesktop, stepZoom } from "./lib/desktop.js";
 import "./styles/app.css";
 import { App } from "./app.jsx";
+import { shortcutsOpen } from "./lib/ui.js";
 import * as player from "./player/engine.js";
+
+// Масштаб: Ctrl+плюс/минус/0 (в приложении; в браузере это делает сам браузер)
+window.addEventListener("keydown", (e) => {
+  if (!isDesktop || !e.ctrlKey || e.altKey) return;
+  if (e.key === "=" || e.key === "+") stepZoom(1);
+  else if (e.key === "-") stepZoom(-1);
+  else if (e.key === "0") stepZoom(0);
+  else return;
+  e.preventDefault();
+});
+
+// Назад/вперёд: Alt+стрелки и боковые кнопки мыши, как в браузере
+window.addEventListener("keydown", (e) => {
+  if (!e.altKey || e.ctrlKey || e.metaKey) return;
+  if (e.code === "ArrowLeft") history.back();
+  if (e.code === "ArrowRight") history.forward();
+});
+window.addEventListener("mouseup", (e) => {
+  if (e.button === 3) history.back();
+  if (e.button === 4) history.forward();
+});
 
 // Горячие клавиши плеера (не срабатывают при вводе текста)
 window.addEventListener("keydown", (e) => {
@@ -34,6 +56,9 @@ window.addEventListener("keydown", (e) => {
       break;
     case "KeyL":
       if (player.current.value) player.like(player.current.value);
+      break;
+    case "Slash":
+      if (e.shiftKey) shortcutsOpen.value = !shortcutsOpen.value;
       break;
   }
 });
