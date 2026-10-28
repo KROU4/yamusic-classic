@@ -15,13 +15,20 @@ const isId = (v) => /^\d+$/.test(String(v ?? ""));
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", laquo: "«", raquo: "»", mdash: "—", ndash: "–" };
 
+/** Removes tags until none are left: one pass would turn "<<b>i>" into a fresh "<i>". */
+function stripTags(s) {
+  let prev;
+  do {
+    prev = s;
+    s = s.replace(/<[^<>]*>/g, "");
+  } while (s !== prev);
+  return s;
+}
+
 /** Descriptions come with HTML (<br/>, <p>, entities); the UI renders plain text with line breaks. */
 export function plainText(s) {
   if (typeof s !== "string" || !s) return "";
-  return s
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>\s*/gi, "\n")
-    .replace(/<[^>]*>/g, "")
+  return stripTags(s.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>\s*/gi, "\n"))
     .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
       if (e[0] === "#") {
         const code = e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
