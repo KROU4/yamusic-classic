@@ -1,6 +1,6 @@
-// Оболочка Electron: поднимает локальный бэкенд и открывает окно с интерфейсом.
-// Плюс интеграция с Windows: кнопки на миниатюре в панели задач, трей, мини-плеер,
-// автозапуск, глобальные горячие клавиши.
+// Electron shell: starts the local backend and opens a window with the UI.
+// Plus Windows integration: taskbar thumbnail buttons, tray, mini player,
+// autostart, global hotkeys.
 import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session, ipcMain, globalShortcut, dialog } from "electron";
 import path from "node:path";
 import fs from "node:fs";
@@ -17,7 +17,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
-// воспроизведение по медиа-клавишам до первого клика по окну
+// playback via media keys until the first click on the window
 app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
 app.setAppUserModelId("dev.krou4.ymclassic");
 
@@ -31,8 +31,8 @@ let tray = null;
 let backend = null;
 let quitting = false;
 let miniMode = false;
-let pendingMaximize = false; // окно стартовало в трее, а развернуть его надо при первом показе
-let normalBounds = null; // размер окна до перехода в мини-плеер
+let pendingMaximize = false; // the window started in the tray, and it must be maximized on first show
+let normalBounds = null; // window size before switching to the mini player
 let playerState = { playing: false };
 
 const MINI_SIZE = { width: 360, height: 600 };
@@ -41,7 +41,7 @@ const FULL_MIN = { width: 980, height: 620 };
 function loadBounds() {
   try {
     const b = JSON.parse(fs.readFileSync(boundsFile, "utf8"));
-    // окно не должно оказаться за пределами отключённого монитора
+    // the window must not end up off a disconnected monitor
     const visible = screen.getAllDisplays().some((d) => {
       const a = d.workArea;
       return b.x < a.x + a.width - 100 && b.x + b.width > a.x + 100 && b.y >= a.y - 20 && b.y < a.y + a.height - 100;
@@ -54,13 +54,13 @@ function loadBounds() {
 
 function saveBounds() {
   if (!win) return;
-  // в мини-режиме запоминаем обычный размер, а не крошечное окно
-  // окно, запущенное в трей «развёрнутым», ещё не развёрнуто — но таким его и надо сохранить
+  // in mini mode remember the normal size, not the tiny window
+  // a window started in the tray "maximized" isn't maximized yet, but that's how it should be saved
   const b = miniMode && normalBounds ? normalBounds : { ...win.getNormalBounds(), maximized: win.isMaximized() || pendingMaximize };
   try {
     fs.writeFileSync(boundsFile, JSON.stringify(b));
   } catch {
-    // не критично
+    // not critical
   }
 }
 
@@ -73,7 +73,7 @@ async function startBackend() {
   const svc = new Service({ dataDir, log });
   await svc.init().catch((e) => log("init failed", e.message));
   const srv = createServer({ svc, staticDir: path.join(root, "dist"), log });
-  // постоянный порт = постоянный origin, иначе localStorage (громкость, тема, очередь) терялся бы при каждом запуске
+  // a fixed port = a fixed origin, otherwise localStorage (volume, theme, queue) would be lost on every launch
   const { url } = await srv.listen(Number(process.env.YMC_PORT || 47819), { fallback: true });
   return { svc, srv, url };
 }
@@ -91,7 +91,7 @@ function showWindow() {
   win.focus();
 }
 
-// ---------- кнопки на миниатюре в панели задач ----------
+// ---------- taskbar thumbnail buttons ----------
 const thumbIcons = {};
 const thumbIcon = (name) => (thumbIcons[name] ||= nativeImage.createFromBuffer(renderPng(32, SHAPES[name])));
 
@@ -106,7 +106,7 @@ function updateThumbar() {
   ]);
 }
 
-// ---------- трей ----------
+// ---------- tray ----------
 function trayMenu() {
   return Menu.buildFromTemplate([
     { label: playerState.id ? `${playerState.title} — ${playerState.artist}`.slice(0, 60) : "YM Classic", enabled: false },
@@ -138,21 +138,21 @@ function createTray() {
   if (icon.isEmpty()) return;
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
   updateTray();
-  // по видимости, а не по фокусу: клик по трею в Windows сам забирает фокус у окна
+  // by visibility, not focus: clicking the tray in Windows takes focus from the window itself
   tray.on("click", () => (win?.isVisible() && !win.isMinimized() ? win.hide() : showWindow()));
 }
 
-// ---------- мини-плеер ----------
+// ---------- mini player ----------
 function setMini(on) {
   if (!win || on === miniMode) return;
   if (on) {
-    // всегда помним обычный прямоугольник окна и был ли он развёрнут — и для возврата, и для saveBounds
+    // always remember the normal window rectangle and whether it was maximized, both for restoring and for saveBounds
     normalBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
     if (win.isMaximized()) win.unmaximize();
     miniMode = true;
     win.setMinimumSize(300, 460);
     const area = screen.getDisplayMatching(win.getBounds()).workArea;
-    // мини-плеер встаёт в правый нижний угол текущего монитора
+    // the mini player goes to the bottom-right corner of the current monitor
     win.setBounds({ ...MINI_SIZE, x: area.x + area.width - MINI_SIZE.width - 24, y: area.y + area.height - MINI_SIZE.height - 24 });
     win.setAlwaysOnTop(true, "floating");
   } else {
@@ -167,8 +167,8 @@ function setMini(on) {
   }
 }
 
-// ---------- глобальные горячие клавиши ----------
-// Ctrl+Alt+Пробел часто занят (PowerToys, переключатели раскладок), поэтому основная пауза — Ctrl+Alt+P
+// ---------- global hotkeys ----------
+// Ctrl+Alt+Space is often taken (PowerToys, layout switchers), so the main pause key is Ctrl+Alt+P
 const HOTKEYS = {
   "CommandOrControl+Alt+P": "toggle",
   "CommandOrControl+Alt+Space": "toggle",
@@ -183,15 +183,15 @@ function applyHotkeys(enabled) {
   globalShortcut.unregisterAll();
   if (!enabled) return;
   for (const [accel, method] of Object.entries(HOTKEYS)) {
-    if (!globalShortcut.register(accel, () => control(method))) log("хоткей занят другой программой:", accel);
+    if (!globalShortcut.register(accel, () => control(method))) log("hotkey taken by another program:", accel);
   }
 }
 
-// ---------- настройки оболочки ----------
+// ---------- shell settings ----------
 function applyPrefs(p) {
-  // автозапуск регистрируем только у собранного приложения, иначе в автозагрузку попал бы electron.exe разработчика
-  // портативная сборка распаковывается во временную папку — в автозагрузку пишем сам portable-exe
-  // (те же path/args и при выключении, иначе Windows не найдёт и не удалит нужную запись)
+  // register autostart only for the packaged app, otherwise the developer's electron.exe would end up in autostart
+  // the portable build unpacks to a temp folder: write the portable exe itself to autostart
+  // (same path/args on disable too, otherwise Windows won't find and remove the right entry)
   if (app.isPackaged) {
     const exe = process.env.PORTABLE_EXECUTABLE_FILE;
     app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"], ...(exe ? { path: exe } : {}) });
@@ -199,7 +199,7 @@ function applyPrefs(p) {
   applyHotkeys(!!p.globalHotkeys);
 }
 
-/** Состояние из renderer приводим к строгой форме: строки обрезаны, ссылки только https, числа — числа. */
+/** Renderer state coerced to a strict shape: strings trimmed, links https only, numbers are numbers. */
 function sanitizeState(s) {
   const str = (v, n = 200) => (typeof v === "string" ? v.slice(0, n) : "");
   const num = (v) => (Number.isFinite(+v) && +v >= 0 ? +v : 0);
@@ -249,14 +249,14 @@ function createWindow(url, key) {
       sandbox: true,
       nodeIntegration: false,
       spellcheck: false,
-      backgroundThrottling: false, // таймеры плеера не должны засыпать в свёрнутом окне
+      backgroundThrottling: false, // player timers must not fall asleep in a minimized window
     },
   });
-  // maximize() у скрытого окна сразу его показывает — разворачиваем только в ready-to-show
+  // maximize() on a hidden window shows it immediately, so maximize only in ready-to-show
   const startMaximized = !!b.maximized;
 
   const origin = new URL(url).origin;
-  // всё, что ведёт наружу, открываем в системном браузере
+  // everything that leads outside is opened in the system browser
   win.webContents.setWindowOpenHandler(({ url: target }) => {
     if (/^https?:/.test(target)) shell.openExternal(target);
     return { action: "deny" };
@@ -269,10 +269,10 @@ function createWindow(url, key) {
   });
 
   win.once("ready-to-show", () => {
-    // запуск из автозагрузки с «Запускать свёрнутым» — окно остаётся в трее (только если трей есть, иначе окно недостижимо)
+    // launch from autostart with "Start minimized": the window stays in the tray (only if a tray exists, otherwise the window is unreachable)
     const stayHidden = launchedHidden && prefs().startMinimized && !!tray && !process.env.YMC_SHOTS;
     if (!stayHidden) {
-      if (startMaximized) win.maximize(); // maximize заодно и показывает окно
+      if (startMaximized) win.maximize(); // maximize also shows the window
       else win.show();
     } else if (startMaximized) {
       pendingMaximize = true;
@@ -282,21 +282,21 @@ function createWindow(url, key) {
       });
     }
     updateThumbar();
-    log(`окно ${stayHidden ? "готово (в трее)" : "показано"} через ${Date.now() - t0} мс после старта`);
+    log(`window ${stayHidden ? "ready (in tray)" : "shown"} ${Date.now() - t0} ms after start`);
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
   win.on("show", updateThumbar);
-  // выключение/выход из Windows: before-quit не приходит, а «свернуть в трей» не должно мешать закрытию
+  // Windows shutdown/logoff: before-quit doesn't arrive, and "minimize to tray" must not block closing
   win.on("session-end", () => {
     quitting = true;
   });
 
-  // перед закрытием окно отправляет текущее прослушивание в историю (анти-повтор и отчёт Яндексу)
+  // before closing the window sends the current listening to the history (anti-repeat and report to Yandex)
   let finalized = false;
   win.on("close", (e) => {
     saveBounds();
     if (!quitting && prefs().closeToTray && tray) {
-      // «свернуть в трей при закрытии»: музыка продолжает играть
+      // "minimize to tray on close": music keeps playing
       e.preventDefault();
       win.hide();
       return;
@@ -320,15 +320,15 @@ function createWindow(url, key) {
   win.loadURL(`${url}#k=${key}`);
 }
 
-// Smoke-режим для визуальной проверки: YMC_SHOTS=путь к JSON [{ hash?, js?, wait?, file, mini? }].
-// Шаги выполняются по очереди в настоящем окне, после каждого с file — снимок окна.
+// Smoke mode for visual checks: YMC_SHOTS=path to JSON [{ hash?, js?, wait?, file, mini? }].
+// Steps run in order in a real window, a window screenshot after each one with file.
 async function runShots(specFile) {
   const steps = JSON.parse(fs.readFileSync(specFile, "utf8"));
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await sleep(3000);
   for (const step of steps) {
     try {
-      // порядок: переход → ожидание загрузки страницы → проверка; без перехода — действие → ожидание результата
+      // order: navigate -> wait for page load -> check; without navigation: action -> wait for the result
       if (step.hash) {
         await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
         await sleep(step.wait ?? 1500);
@@ -340,10 +340,10 @@ async function runShots(specFile) {
       if (!step.hash) await sleep(step.wait ?? 1500);
       if (step.file) {
         fs.writeFileSync(step.file, (await win.webContents.capturePage()).toPNG());
-        log("снимок:", path.basename(step.file));
+        log("screenshot:", path.basename(step.file));
       }
     } catch (e) {
-      log("шаг упал:", e.message);
+      log("step failed:", e.message);
     }
   }
   quitting = true;
@@ -354,10 +354,10 @@ app.on("second-instance", showWindow);
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  // музыкальному клиенту не нужны ни камера, ни микрофон, ни уведомления сайтов
+  // a music client needs neither camera, nor microphone, nor site notifications
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
-  // Аудио-CDN Яндекса разрешает CORS только для music.yandex.ru. Без заголовка Web Audio (эквалайзер,
-  // реакция анимации волны на музыку) получает тишину, поэтому добавляем его к ответам аудиохостов.
+  // Yandex's audio CDN allows CORS only for music.yandex.ru. Without the header Web Audio (equalizer,
+  // wave animation reacting to music) gets silence, so we add it to audio host responses.
   session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://*.yandex.net/*"] }, (d, cb) => {
     if (d.resourceType !== "media") return cb({});
     const headers = { ...d.responseHeaders };
@@ -367,14 +367,14 @@ app.whenReady().then(async () => {
   });
   try {
     backend = await startBackend();
-    log(`бэкенд готов через ${Date.now() - t0} мс`);
+    log(`backend ready ${Date.now() - t0} ms after start`);
     createWindow(backend.url, backend.srv.key);
     createTray();
     applyPrefs(prefs());
     backend.svc.onPrefs((next) => applyPrefs(next));
   } catch (e) {
-    // иначе невидимый процесс без окна держал бы блокировку единственного экземпляра
-    log("запуск не удался:", e.stack || e.message);
+    // otherwise an invisible process without a window would hold the single-instance lock
+    log("startup failed:", e.stack || e.message);
     dialog.showErrorBox("YM Classic", "Не удалось запустить локальный сервер: " + e.message);
     app.exit(1);
   }
@@ -384,7 +384,7 @@ app.on("before-quit", () => {
   quitting = true;
 });
 
-// will-quit наступает после закрытия окон — к этому моменту финальное прослушивание уже записано
+// will-quit happens after windows are closed: by then the final listening is already recorded
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   backend?.svc.store.saveNow();

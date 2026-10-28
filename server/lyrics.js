@@ -1,6 +1,6 @@
-// Тексты песен: синхронные из Яндекса, при отсутствии или цензуре — LRCLIB (без цензуры).
+// Lyrics: synced from Yandex; when missing or censored, LRCLIB (uncensored).
 
-/** Разбор LRC: «[01:23.45]строка» -> { t: секунды, text }. Несколько меток на строке поддерживаются. */
+/** LRC parsing: "[01:23.45]line" -> { t: seconds, text }. Several timestamps per line are supported. */
 export function parseLrc(src = "") {
   const lines = [];
   for (const raw of src.split(/\r?\n/)) {
@@ -15,7 +15,7 @@ export function parseLrc(src = "") {
   return lines.sort((a, b) => a.t - b.t);
 }
 
-// «б***», «***», «f**k», «█» — типичные следы вырезанных слов в тексте
+// "b***", "***", "f**k", "█" are typical traces of removed words in the text
 const CENSOR_RE = /(\p{L}\*{2,}|\*{3,}|█|\[цензура\]|\[censored\])/iu;
 
 export const isCensoredText = (text = "") => CENSOR_RE.test(text);
@@ -56,7 +56,7 @@ function pickClosest(list, duration) {
     .filter((x) => x.syncedLyrics || x.plainLyrics)
     .map((x) => ({ x, d: Math.abs((x.duration || 0) - duration) + (x.syncedLyrics ? 0 : 5) }))
     .sort((a, b) => a.d - b.d);
-  // разница больше 15 секунд — скорее всего другая песня
+  // difference over 15 seconds: most likely a different song
   return scored.length && scored[0].d <= 15 ? scored[0].x : null;
 }
 
@@ -72,13 +72,13 @@ function shape(source, synced, plain) {
 
 /**
  * @param api YandexMusic
- * @param track нормализованный трек
+ * @param track normalized track
  * @param prefer "auto" | "yandex" | "lrclib"
  */
 export async function getLyrics(api, track, { prefer = "auto", fetchImpl = globalThis.fetch } = {}) {
   let yandex = null;
   if (prefer !== "lrclib" && (track.lyrics.sync || track.lyrics.text)) {
-    // если LRC не отдался, всё равно пробуем обычный текст
+    // if the LRC wasn't returned, still try plain text
     const lrc = track.lyrics.sync ? await api.lyrics(track.id, "LRC").catch(() => null) : null;
     const txt = !lrc ? await api.lyrics(track.id, "TEXT").catch(() => null) : null;
     if (lrc) yandex = shape("yandex", lrc.text, null);
@@ -91,7 +91,7 @@ export async function getLyrics(api, track, { prefer = "auto", fetchImpl = globa
   const lr = await fromLrclib(track, fetchImpl).catch(() => null);
   if (lr) {
     const result = shape("lrclib", lr.syncedLyrics, lr.plainLyrics);
-    // LRCLIB без синхронизации хуже синхронного яндексовского текста без цензуры
+    // unsynced LRCLIB is worse than Yandex's synced lyrics that have no censorship
     if (result.synced || !yandex || censored) return { ...result, censored: false, replacedCensored: censored };
   }
   return yandex ? { ...yandex, censored } : null;

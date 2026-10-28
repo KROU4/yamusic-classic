@@ -1,4 +1,4 @@
-// Мост к оболочке Electron (window.ymcDesktop из preload). В браузере всё это молча отключено.
+// Bridge to the Electron shell (window.ymcDesktop from preload). In the browser all of this is silently disabled.
 import { effect, signal } from "@preact/signals";
 import * as p from "../player/engine.js";
 import { artistNames } from "./format.js";
@@ -7,7 +7,7 @@ const bridge = window.ymcDesktop || null;
 export const isDesktop = !!bridge;
 export const mini = signal(false);
 
-/** Масштаб интерфейса: в приложении — зум окна, в браузере масштабом управляет сам браузер. */
+/** Interface zoom: in the app — window zoom, in the browser the browser itself handles zoom. */
 export const ZOOM_STEPS = [0.75, 0.85, 0.9, 1, 1.1, 1.25, 1.5];
 const readZoom = () => {
   try {
@@ -25,7 +25,7 @@ export function setZoom(v) {
   try {
     localStorage.setItem("ymc-zoom", String(z));
   } catch {
-    // без сохранения
+    // without persistence
   }
 }
 export function stepZoom(dir) {
@@ -55,9 +55,9 @@ function snapshot() {
   };
 }
 
-// оболочка знает, что играет: кнопки на панели задач, подсказка в трее.
-// Смена трека и пауза уходят сразу; перемотка — с задержкой, чтобы перетаскивание ползунка
-// не засыпало оболочку сообщениями
+// the shell knows what's playing: taskbar buttons, tray tooltip.
+// Track changes and pause are sent immediately; seeking — with a delay, so dragging the slider
+// doesn't flood the shell with messages
 let last = "";
 let seekTimer = null;
 let lastSeekGen = p.seekGen.peek();

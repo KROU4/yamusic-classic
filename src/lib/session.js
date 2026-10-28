@@ -1,4 +1,4 @@
 import { signal } from "@preact/signals";
 
-/** Текущий аккаунт (uid нужен, чтобы отличать свои плейлисты от чужих). */
+/** Current account (uid is needed to tell own playlists from others'). */
 export const me = signal(null);

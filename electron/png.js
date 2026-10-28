@@ -1,4 +1,4 @@
-// Минимальный PNG-рендер без зависимостей: иконки для кнопок панели задач рисуются кодом.
+// Minimal dependency-free PNG renderer: taskbar button icons are drawn in code.
 import zlib from "node:zlib";
 
 function crc32(buf) {
@@ -19,7 +19,7 @@ function chunk(type, data) {
   return Buffer.concat([len, td, crc]);
 }
 
-/** inside(x, y) -> 0..1 покрытие в точке; суперсэмплинг 4×4 для гладких краёв. Цвет — белый. */
+/** inside(x, y) -> 0..1 coverage at a point; 4×4 supersampling for smooth edges. The color is white. */
 export function renderPng(size, inside, color = [255, 255, 255]) {
   const SS = 4;
   const raw = Buffer.alloc((size * 4 + 1) * size);
@@ -49,7 +49,7 @@ export function renderPng(size, inside, color = [255, 255, 255]) {
   ]);
 }
 
-// Фигуры в нормализованных координатах 0..1
+// Shapes in normalized coordinates 0..1
 const tri = (ax, ay, bx, by, cx, cy) => (x, y) => {
   const s = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
   const d1 = s(x, y, ax, ay, bx, by), d2 = s(x, y, bx, by, cx, cy), d3 = s(x, y, cx, cy, ax, ay);

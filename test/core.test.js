@@ -18,8 +18,8 @@ const track = (id, artistId, title, extra = {}) => ({
   ...extra,
 });
 
-describe("подписи", () => {
-  it("file-info: HMAC-SHA256 в base64 без последнего символа", () => {
+describe("signatures", () => {
+  it("file-info: HMAC-SHA256 in base64 without the last character", () => {
     const expected = crypto
       .createHmac("sha256", PLAYER_KEYS.win32)
       .update("100123lossless" + "flacmp3" + "raw")
@@ -27,28 +27,28 @@ describe("подписи", () => {
       .slice(0, -1);
     expect(fileInfoSign({ ts: 100, trackId: "123", quality: "lossless", codecs: ["flac", "mp3"], transports: ["raw"] })).toBe(expected);
   });
-  it("lyrics: trackId + ts, base64 целиком", () => {
+  it("lyrics: trackId + ts, full base64", () => {
     const expected = crypto.createHmac("sha256", PLAYER_KEYS.win32).update("555" + "100").digest("base64");
     expect(lyricsSign({ trackId: "555", ts: 100 })).toBe(expected);
   });
 });
 
-describe("поиск сессии", () => {
+describe("session lookup", () => {
   const tok = (c) => `y0_${c.repeat(40)}`;
-  it("свежие файлы и последние записи идут первыми, дубликаты убираются", () => {
+  it("fresh files and latest entries come first, duplicates are removed", () => {
     const files = [
       { name: "000005.ldb", mtimeMs: 1, content: Buffer.from(`xx${tok("A")}\x00yy`) },
       { name: "000350.log", mtimeMs: 5, content: Buffer.from(`${tok("B")}..${tok("C")}..${tok("A")}`) },
     ];
     expect(extractCandidates(files)).toEqual([tok("A"), tok("C"), tok("B")]);
   });
-  it("приклеенные ASCII-байты: пробует и обрезанный до типичной длины вариант", () => {
-    const real = `y0_${"Z".repeat(50)}`; // 53 символа
+  it("glued ASCII bytes: also tries the variant trimmed to a typical length", () => {
+    const real = `y0_${"Z".repeat(50)}`; // 53 characters
     const out = extractCandidates([{ name: "1.log", mtimeMs: 1, content: Buffer.from(`\x01${real}Ab9\x00`) }]);
     expect(out[0]).toBe(`${real}Ab9`);
     expect(out).toContain(real);
   });
-  it("выбирает первый токен, прошедший проверку", async () => {
+  it("picks the first token that passes validation", async () => {
     const dir = await import("node:fs").then((fs) => fs.mkdtempSync(`${(process.env.TEMP || "/tmp")}/ymc-`));
     const r = await resolveSession({
       env: { YM_TOKEN: "bad" },
@@ -59,15 +59,15 @@ describe("поиск сессии", () => {
     expect(r.source).toBe("stored");
     expect(r.token).toBe("good");
   });
-  it("без рабочего токена возвращает null", async () => {
+  it("returns null when there is no working token", async () => {
     const r = await resolveSession({ env: {}, dirs: [], validate: async () => null });
     expect(r).toBeNull();
   });
 });
 
-describe("курирование волны", () => {
+describe("wave curation", () => {
   const now = 1_000_000_000_000;
-  it("убирает недавно сыгранное, но пропускает сыгранное давно", () => {
+  it("drops recently played but lets through long-ago played", () => {
     const history = new Map([
       ["1", now - 1000],
       ["2", now - 40 * 86400000],
@@ -76,38 +76,38 @@ describe("курирование волны", () => {
     expect(accepted.map((t) => t.id)).toEqual(["2"]);
     expect(rejected[0].reason).toBe("recently-played");
   });
-  it("держит дистанцию между треками одного исполнителя", () => {
+  it("keeps distance between tracks by the same artist", () => {
     const { accepted } = curate([track(1, 7, "a"), track(2, 7, "b"), track(3, 8, "c")], { now, settings: { artistGap: 5 } });
     expect(accepted.map((t) => t.id)).toEqual(["1", "3"]);
   });
-  it("считает slowed/sped up/hardtekk-версии одной песней", () => {
+  it("treats slowed/sped up/hardtekk versions as one song", () => {
     const list = [track(1, 1, "Sometimes"), track(2, 1, "SOMETIMES - HARDTEKK"), track(3, 1, "Sometimes (Slowed + Reverb)")];
     const { accepted, rejected } = curate(list, { now, settings: { artistGap: 0 } });
     expect(accepted).toHaveLength(1);
     expect(rejected.every((r) => r.reason === "same-song")).toBe(true);
   });
-  it("ограничивает долю лайкнутых", () => {
+  it("limits the share of liked tracks", () => {
     const liked = new Set(["1", "2", "3"]);
     const list = [track(1, 1, "a"), track(2, 2, "b"), track(3, 3, "c"), track(4, 4, "d")];
     expect(curate(list, { now, liked, settings: { likedEvery: 0 } }).accepted.map((t) => t.id)).toEqual(["4"]);
     expect(curate(list, { now, liked, settings: { likedEvery: 8 } }).accepted.map((t) => t.id)).toEqual(["1", "4"]);
-    // «Без ограничений» действительно пропускает все лайкнутые
+    // "No limit" really lets all liked tracks through
     expect(curate(list, { now, liked, settings: { likedEvery: 1 } }).accepted.map((t) => t.id)).toEqual(["1", "2", "3", "4"]);
   });
-  it("дизлайкнутые и недоступные не проходят, доступный оригинал спасает подменённый трек", () => {
+  it("disliked and unavailable tracks don't pass, an available original rescues a substituted track", () => {
     const sub = track(9, 9, "orig");
     const list = [track(1, 1, "a", { available: false }), track(2, 2, "b", { available: false, substituted: sub }), track(3, 3, "c")];
     const { accepted } = curate(list, { now, disliked: new Set(["3"]) });
     expect(accepted.map((t) => t.id)).toEqual(["2"]);
   });
-  it("фильтр переделок отличает «Slow Dancing» от «(slowed)»", () => {
+  it("rework filter tells 'Slow Dancing' from '(slowed)'", () => {
     expect(isRework(track(1, 1, "Slow Dancing in the Dark"))).toBe(false);
     expect(isRework(track(1, 1, "Song (Slowed)"))).toBe(true);
     expect(isRework(track(1, 1, "Song", { version: "Radio Edit" }))).toBe(true);
     expect(isRework(track(1, 1, "MONTAGEM XONADA (Super Slowed)"))).toBe(true);
     expect(isRework(track(1, 1, "Mix Tape"))).toBe(false);
   });
-  it("baseTitle нормализует пометки", () => {
+  it("baseTitle normalizes marks", () => {
     expect(baseTitle("Too Much (hardtekk)")).toBe("too much");
     expect(baseTitle("Decode - Sped Up")).toBe("decode");
     expect(baseTitle("Song (feat. X)")).toBe("song feat x");
@@ -115,8 +115,8 @@ describe("курирование волны", () => {
   });
 });
 
-describe("тексты", () => {
-  it("разбирает LRC, включая несколько меток на строке", () => {
+describe("lyrics", () => {
+  it("parses LRC, including several timestamps per line", () => {
     const lines = parseLrc("[ar:x]\n[00:01.50]first\n[00:03.00][00:10.25]chorus\n[00:05.123]third");
     expect(lines.map((l) => [l.t, l.text])).toEqual([
       [1.5, "first"],
@@ -125,22 +125,22 @@ describe("тексты", () => {
       [10.25, "chorus"],
     ]);
   });
-  it("распознаёт следы цензуры", () => {
+  it("recognizes traces of censorship", () => {
     expect(isCensoredText("какой-то б*** текст")).toBe(true);
     expect(isCensoredText("*** ***")).toBe(true);
     expect(isCensoredText("обычный текст с 5*2 = 10")).toBe(false);
   });
 });
 
-describe("без цензуры", () => {
-  it("играет доступный оригинал вместо подмены", () => {
+describe("uncensored", () => {
+  it("plays the available original instead of the substitute", () => {
     const orig = track(2, 1, "x");
     const t = track(1, 1, "x", { substituted: orig });
     expect(preferOriginal(t).id).toBe("2");
     expect(preferOriginal(t).replacedFrom).toBe("1");
     expect(preferOriginal(track(1, 1, "x", { substituted: { ...orig, available: false } })).id).toBe("1");
   });
-  it("explicit-близнец: тот же артист, то же название, близкая длительность", () => {
+  it("explicit twin: same artist, same title, close duration", () => {
     const clean = track(1, 5, "Song", { clean: true });
     expect(isExplicitTwin(clean, track(2, 5, "Song", { explicit: true }))).toBe(true);
     expect(isExplicitTwin(clean, track(2, 5, "Song", { explicit: false }))).toBe(false);
@@ -149,8 +149,8 @@ describe("без цензуры", () => {
   });
 });
 
-describe("нормализация", () => {
-  it("строит URL обложки и вытаскивает подмену", () => {
+describe("normalization", () => {
+  it("builds the cover URL and extracts the substitution", () => {
     expect(coverUrl("avatars.yandex.net/get-music-content/1/a/%%", 200)).toBe("https://avatars.yandex.net/get-music-content/1/a/200x200");
     const t = normTrack({
       id: 1,
@@ -162,17 +162,17 @@ describe("нормализация", () => {
     });
     expect(t).toMatchObject({ id: "1", albumId: "3", explicit: true, substituted: { id: "4" } });
   });
-  it("сиды настроек волны", () => {
+  it("wave settings seeds", () => {
     expect(settingsSeeds({ diversity: "discover", moodEnergy: "all", language: "russian" })).toEqual(["settingDiversity:discover", "settingLanguage:russian"]);
     expect(settingsSeeds({})).toEqual([]);
     expect(settingsSeeds({ activity: "workout", moodEnergy: "calm" })).toEqual(["activity:workout", "settingMoodEnergy:calm"]);
-    // неизвестные значения не превращаются в сиды
+    // unknown values don't turn into seeds
     expect(settingsSeeds({ activity: "x:y", diversity: "evil" })).toEqual([]);
   });
 });
 
-describe("сервис", () => {
-  // сервис с поддельным API: сеть не трогаем, проверяем только прикладную логику
+describe("service", () => {
+  // service with a fake API: no network, only application logic is checked
   async function makeService() {
     const fs = await import("node:fs");
     const os = await import("node:os");
@@ -186,7 +186,7 @@ describe("сервис", () => {
   }
   const tick = () => new Promise((r) => setTimeout(r, 5));
 
-  it("правки одного плейлиста идут по очереди со свежей ревизией, ошибка не рвёт очередь", async () => {
+  it("edits of one playlist go in order with a fresh revision, an error doesn't break the queue", async () => {
     const svc = await makeService();
     let revision = 1;
     let count = 0;
@@ -210,7 +210,7 @@ describe("сервис", () => {
     expect(svc.playlistLocks.size).toBe(0);
   });
 
-  it("создание плейлиста не считается неудачей, если не добавились треки", async () => {
+  it("creating a playlist isn't a failure if the tracks weren't added", async () => {
     const svc = await makeService();
     svc.api.createPlaylist = async (uid, title) => ({ kind: 7, title, uid });
     svc.api.playlist = async () => ({ revision: 1, trackCount: 0 });
@@ -223,7 +223,7 @@ describe("сервис", () => {
     expect((await svc.createPlaylist("Пустой")).addError).toBeNull();
   });
 
-  it("статистика оставляет топ-треки, которые не удалось догрузить", async () => {
+  it("statistics keep top tracks that couldn't be loaded", async () => {
     const svc = await makeService();
     svc.playlog.add({ id: "9", title: "Песня", artists: [{ id: 1, name: "A" }], albumId: "3", cover: null }, 120);
     svc.api.tracks = async () => {
@@ -234,7 +234,7 @@ describe("сервис", () => {
     expect(s.topTracks[0]).toMatchObject({ id: "9", albumId: "3", title: "Песня", durationMs: 0, available: true, plays: 1, seconds: 120 });
   });
 
-  it("сбой дозаполнения не роняет запуск волны", async () => {
+  it("a refill failure doesn't crash the wave launch", async () => {
     const svc = await makeService();
     svc.api.sessionNew = async () => ({ radioSessionId: "s1", batchId: "b1", sequence: [] });
     svc.api.sessionTracks = async () => {
@@ -245,7 +245,7 @@ describe("сервис", () => {
     expect(svc.wave.session.stationId).toBe("genre:rock");
   });
 
-  it("устаревший запуск станции не забирает буфер более новой", async () => {
+  it("a stale station launch doesn't take the buffer of a newer one", async () => {
     const svc = await makeService();
     let n = 0;
     svc.api.sessionNew = async () => ({ radioSessionId: `s${++n}`, batchId: "b", sequence: [] });

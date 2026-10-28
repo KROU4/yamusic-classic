@@ -1,6 +1,6 @@
-// Генеративная анимация «Моей волны»: мягкие перетекающие цвета и расходящиеся волны.
-// Свой шейдер WebGL; реагирует на музыку через анализатор звукового графа, цвета — по настроению волны.
-// Режимы: full (шейдер), lite (лёгкая CSS-анимация), off (статичный градиент). Без WebGL — lite.
+// Generative animation for My Wave: soft flowing colors and expanding ripples.
+// Custom WebGL shader; reacts to music via the audio graph analyzer, colors follow the wave's mood.
+// Modes: full (shader), lite (light CSS animation), off (static gradient). Without WebGL — lite.
 import { useEffect, useRef } from "preact/hooks";
 import { vibeMode } from "../lib/ui.js";
 import * as graph from "../player/audiograph.js";
@@ -21,7 +21,7 @@ const PALETTES = {
   "fall-asleep": ["#3b3f9e", "#6f5cff", "#1e8bc3"],
 };
 
-/** Цвета по настройкам волны: настроение важнее занятия, без настроек — фирменные тёплые. */
+/** Colors from the wave settings: mood outranks activity; with no settings, the signature warm ones. */
 export function paletteFor(settings) {
   const s = settings || {};
   if (s.moodEnergy && s.moodEnergy !== "all" && PALETTES[s.moodEnergy]) return PALETTES[s.moodEnergy];
@@ -44,7 +44,7 @@ void main(){
  vec2 w=uv+(q-.5)*(.24+uEnergy*.2);
  float m=fbm(w*2.1+vec2(t*1.4,-t));
  float d=length(w)*(.88+.24*m);
- // светящееся кольцо вокруг заголовка: радиус и толщина дышат басом, середина остаётся тёмной под текст
+ // glowing ring around the title: radius and thickness breathe with the bass, the middle stays dark for the text
  float R=.40+.03*sin(uTime*.7)+uBass*.07+uPulse*.08;
  float W=.10+.07*uEnergy+.05*uPulse;
  float glow=exp(-pow((d-R)/W,2.));
@@ -95,12 +95,12 @@ function startGl(canvas, getState) {
   let last = performance.now();
   let time = Math.random() * 100;
   const sm = { energy: 0, bass: 0, pulse: 0, play: 0, colors: null };
-  // фон темы перечитываем раз в секунду: тема «как в системе» меняется без перерисовки компонента
+  // re-read the theme background once a second: the "follow system" theme changes without re-rendering the component
   let bg = hex(cssBg());
   let bgAt = 0;
 
   const resize = () => {
-    // половинное разрешение: картинка всё равно размытая, а GPU работает вчетверо меньше
+    // half resolution: the image is blurry anyway, and the GPU does a quarter of the work
     const scale = Math.min(1, (window.devicePixelRatio || 1) * 0.5);
     const w = Math.max(1, Math.round(canvas.clientWidth * scale));
     const hgt = Math.max(1, Math.round(canvas.clientHeight * scale));
@@ -118,7 +118,7 @@ function startGl(canvas, getState) {
     last = now;
     const st = getState();
     const lv = st.playing ? graph.levels() : null;
-    // без анализатора (браузер, пауза) — спокойное «дыхание», чуть живее во время игры
+    // without an analyzer (browser, paused) — a calm "breathing", slightly livelier while playing
     const target = lv || { energy: st.playing ? 0.35 + 0.1 * Math.sin(now / 900) : 0.12, bass: st.playing ? 0.15 + 0.08 * Math.sin(now / 430) : 0.04 };
     const k = 1 - Math.exp(-dt * 7);
     sm.energy += (target.energy - sm.energy) * k;
@@ -129,7 +129,7 @@ function startGl(canvas, getState) {
       sm.pulseAt = st.pulseAt;
       sm.pulse = 1;
     }
-    // плавная смена палитры при смене настроения
+    // smooth palette change when the mood changes
     const target3 = st.colors.map(hex);
     sm.colors = sm.colors ? sm.colors.map((c, i) => c.map((v, j) => v + (target3[i][j] - v) * (1 - Math.exp(-dt * 3)))) : target3;
     time += dt * (0.6 + sm.play * 0.4 + sm.energy * 1.2);
@@ -157,7 +157,7 @@ function startGl(canvas, getState) {
       raf = requestAnimationFrame(frame);
     }
   };
-  // анимация не тратит GPU, когда блок прокручен за экран или окно свёрнуто
+  // the animation doesn't use the GPU when the block is scrolled off-screen or the window is minimized
   const io = new IntersectionObserver(([e]) => {
     visible = e.isIntersecting;
     kick();
@@ -176,8 +176,8 @@ function startGl(canvas, getState) {
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 /**
- * colors — палитра из трёх цветов; active — волна сейчас играет (анимация реагирует на звук).
- * pulseAt — метка времени события (лайк), на которое анимация отвечает вспышкой.
+ * colors — a three-color palette; active — the wave is playing now (the animation reacts to sound).
+ * pulseAt — timestamp of an event (like) that the animation answers with a flash.
  */
 export function VibeCanvas({ colors, active, pulseAt }) {
   const ref = useRef(null);
@@ -192,7 +192,7 @@ export function VibeCanvas({ colors, active, pulseAt }) {
       const stop = startGl(ref.current, () => state.current);
       if (stop) return stop;
     } catch {
-      // шейдер не собрался на этой видеокарте — остаётся лёгкая анимация
+      // the shader failed to build on this GPU — the light animation remains
     }
     failed.current = true;
     ref.current?.classList.add("vibe-fallback");
@@ -203,7 +203,7 @@ export function VibeCanvas({ colors, active, pulseAt }) {
     return (
       <div class={`vibe-canvas ${active && p.playing.value ? "is-playing" : ""}`} style={style} aria-hidden="true">
         <canvas ref={ref} />
-        {/* запасной вариант: виден, только если шейдер не собрался (canvas получает .vibe-fallback) */}
+        {/* fallback: visible only if the shader failed to build (the canvas gets .vibe-fallback) */}
         <div class="vibe-lite">
           <i />
           <i />

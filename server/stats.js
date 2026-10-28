@@ -1,5 +1,5 @@
-// Журнал прослушиваний для страницы «Моя статистика». Живёт отдельно от истории анти-повтора:
-// её очистка (чтобы снова слышать сыгранное) не стирает статистику.
+// Listening log for the "My statistics" page. Lives separately from the anti-repeat history:
+// clearing that one (to hear played tracks again) doesn't erase the statistics.
 
 const DAY = 24 * 60 * 60 * 1000;
 const MAX_LOG = 20000;
@@ -31,7 +31,7 @@ export class PlayLog {
   }
 }
 
-const formatters = new Map(); // timeZone -> Intl.DateTimeFormat (создавать его дорого)
+const formatters = new Map(); // timeZone -> Intl.DateTimeFormat (expensive to create)
 
 function zoneFormatter(timeZone) {
   let f = formatters.get(timeZone);
@@ -42,18 +42,18 @@ function zoneFormatter(timeZone) {
   return f;
 }
 
-/** Календарный сдвиг ключа YYYY-MM-DD на n дней — без привязки к часовому поясу. */
+/** Calendar shift of a YYYY-MM-DD key by n days, independent of the time zone. */
 const shiftDay = (key, n) => new Date(Date.parse(`${key}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
 /**
- * Локальные часы: ts -> { day: YYYY-MM-DD, hour }. С IANA-поясом учитывает переходы на летнее время,
- * без него (или с неизвестным поясом) — фиксированное смещение tzOffsetMin, как getTimezoneOffset().
+ * Local hours: ts -> { day: YYYY-MM-DD, hour }. With an IANA zone it accounts for DST transitions,
+ * without it (or with an unknown zone) a fixed offset tzOffsetMin, like getTimezoneOffset().
  */
 function localClock(timeZone, tzOffsetMin) {
   if (timeZone) {
     try {
       const fmt = zoneFormatter(timeZone);
-      const memo = new Map(); // все смещения поясов кратны 15 минутам — кэшируем по четвертям часа
+      const memo = new Map(); // all zone offsets are multiples of 15 minutes, so cache by quarter hours
       return (ts) => {
         const slot = Math.floor(ts / 900000);
         let v = memo.get(slot);
@@ -67,7 +67,7 @@ function localClock(timeZone, tzOffsetMin) {
       };
     } catch (e) {
       if (!(e instanceof RangeError)) throw e;
-      // неизвестный пояс — откатываемся на смещение
+      // unknown zone: fall back to the offset
     }
   }
   return (ts) => {
@@ -76,17 +76,17 @@ function localClock(timeZone, tzOffsetMin) {
   };
 }
 
-/** Сводка за последние `days` дней. Чистая функция — удобно тестировать. */
+/** Summary for the last `days` days. Pure function, easy to test. */
 export function computeStats(entries, { days = 7, now = Date.now(), tzOffsetMin = 0, timeZone = null } = {}) {
   const clock = localClock(timeZone, tzOffsetMin);
   const today = clock(now).day;
-  // окно начинается с локальной полуночи (days-1) дней назад: первый столбец «по дням» — полный день
+  // the window starts at local midnight (days-1) days ago: the first "by day" column is a full day
   const firstDay = shiftDay(today, -(days - 1));
   const list = entries.filter((e) => e.ts <= now && clock(e.ts).day >= firstDay);
   const artists = new Map();
   const tracks = new Map();
   const byHour = Array(24).fill(0);
-  const byDay = new Map(); // YYYY-MM-DD -> секунды
+  const byDay = new Map(); // YYYY-MM-DD -> seconds
   let total = 0;
 
   for (const e of list) {
@@ -100,7 +100,7 @@ export function computeStats(entries, { days = 7, now = Date.now(), tzOffsetMin 
     tr.seconds += e.s;
     tracks.set(e.id, tr);
 
-    // время делим между соавторами, чтобы фиты не раздували статистику
+    // time is split between co-authors so that feats don't inflate statistics
     const share = e.s / Math.max(1, e.a.length);
     for (const [id, name] of e.a) {
       const ar = artists.get(id) || { id, name, seconds: 0, plays: 0, cover: e.c };
@@ -110,12 +110,12 @@ export function computeStats(entries, { days = 7, now = Date.now(), tzOffsetMin 
     }
   }
 
-  // серия: сколько дней подряд до сегодняшнего включительно была музыка
+  // streak: how many days in a row up to and including today had music
   const allDays = new Set(entries.map((e) => clock(e.ts).day));
   let streak = 0;
   for (let d = 0; d < 3650; d++) {
     if (allDays.has(shiftDay(today, -d))) streak++;
-    else if (d > 0) break; // сегодня можно ещё не успеть послушать
+    else if (d > 0) break; // today there may not have been time to listen yet
   }
 
   const dayList = [];

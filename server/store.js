@@ -1,4 +1,4 @@
-// Простое JSON-хранилище в папке данных пользователя с отложенной записью.
+// Simple JSON store in the user data folder with deferred writes.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -9,7 +9,7 @@ export class JsonStore {
     try {
       Object.assign(this.data, JSON.parse(fs.readFileSync(file, "utf8")));
     } catch {
-      // первый запуск или повреждённый файл — начинаем с умолчаний
+      // first run or a corrupted file: start with defaults
     }
     this.timer = null;
   }
@@ -38,17 +38,17 @@ export class JsonStore {
       fs.writeFileSync(tmp, json);
       fs.renameSync(tmp, this.file);
     } catch {
-      // на Windows rename иногда падает с EPERM (антивирус держит файл) — пишем напрямую
+      // on Windows rename sometimes fails with EPERM (antivirus holds the file): write directly
       try {
         fs.writeFileSync(this.file, json);
       } catch {
-        // не удалось сохранить — попробуем при следующем изменении, бэкенд не падает
+        // couldn't save: retry on the next change, the backend doesn't crash
       }
     }
   }
 }
 
-/** История прослушиваний: трек -> время, «песня» -> время, плюс лента последних треков. */
+/** Listening history: track -> time, "song" -> time, plus a feed of the latest tracks. */
 export class PlayHistory {
   constructor(store, { maxEntries = 20000, tapeSize = 50 } = {}) {
     this.store = store;

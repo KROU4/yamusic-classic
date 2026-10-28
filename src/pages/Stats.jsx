@@ -1,4 +1,4 @@
-// «Моя статистика» — что и когда вы слушали. Считается по локальному журналу клиента.
+// «Моя статистика» (My Stats) — what and when you listened to. Computed from the client's local log.
 import { useState } from "preact/hooks";
 import { useLoad } from "../lib/useLoad.js";
 import { api, dropCache } from "../lib/api.js";
@@ -25,7 +25,7 @@ function hours(sec) {
   return h ? `${h} ч ${m} мин` : `${m} мин`;
 }
 
-// ключ дня «ГГГГ-ММ-ДД» — местный полдень: new Date("ГГГГ-ММ-ДД") парсится как полночь UTC и западнее UTC даёт вчерашний день
+// day key "YYYY-MM-DD" — local noon: new Date("YYYY-MM-DD") is parsed as midnight UTC and west of UTC yields the previous day
 const localDay = (day) => new Date(`${day}T12:00:00`);
 
 function Tile({ value, label }) {
@@ -53,10 +53,10 @@ function Bars({ items, labelOf, titleOf, highlight }) {
 
 export function StatsPage() {
   const [days, setDays] = useState(30);
-  // версия в адресе — перечитать статистику после очистки без перезагрузки окна (иначе встанет музыка)
+  // version in the address — re-read the stats after clearing without reloading the window (otherwise the music would stop)
   const [version, setVersion] = useState(0);
   const tz = new Date().getTimezoneOffset();
-  // IANA-зона точнее смещения: учитывает переходы на летнее время внутри периода
+  // an IANA zone is more precise than an offset: it accounts for DST transitions within the period
   const zone = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
   const path = `/stats?days=${days}&tz=${tz}&zone=${zone}&v=${version}`;
   const { data, loading, error } = useLoad(path, 30000);

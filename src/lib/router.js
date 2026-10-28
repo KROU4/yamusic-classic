@@ -1,4 +1,4 @@
-// Минимальный hash-роутер: #/album/123 -> { name: "album", params: { id: "123" } }.
+// Minimal hash router: #/album/123 -> { name: "album", params: { id: "123" } }.
 import { signal } from "@preact/signals";
 
 const ROUTES = [
@@ -26,7 +26,7 @@ function parse() {
 
 export const route = signal(parse());
 
-// Сохраняем прокрутку каждой страницы: возврат «назад» не сбрасывает позицию (частая жалоба)
+// Save each page's scroll position: going "back" doesn't reset it (a common complaint)
 const scrollPositions = new Map();
 let current = route.value.path;
 

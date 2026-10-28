@@ -21,7 +21,7 @@ export function setTheme(t) {
   try {
     localStorage.setItem("ymc-theme", t);
   } catch {
-    // без сохранения
+    // without persistence
   }
   apply();
 }

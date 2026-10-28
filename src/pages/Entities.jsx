@@ -1,4 +1,4 @@
-// Страницы сущностей: альбом, исполнитель, плейлист.
+// Entity pages: album, artist, playlist.
 import { useState } from "preact/hooks";
 import { useLoad } from "../lib/useLoad.js";
 import { api, dropCache } from "../lib/api.js";
@@ -148,7 +148,7 @@ export function PlaylistPage({ uid, kind }) {
   if (error && !data) return <ErrorState error={error} />;
   const { playlist, tracks } = data;
   const own = me.value?.uid != null && String(me.value.uid) === String(uid);
-  // перечитать плейлист после правки на месте: старые данные остаются на экране до прихода новых
+  // re-read the playlist after an in-place edit: old data stays on screen until the new data arrives
   const refresh = () => reload();
   const ctx = { title: playlist.title, link: `/playlist/${uid}/${kind}`, from: "desktop_win-playlist-playlist-default" };
   const rename = async () => {

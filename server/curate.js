@@ -1,9 +1,9 @@
-// Курирование выдачи волны: убираем повторы, которые официальный клиент пропускает.
-// Чистые функции, состояние передаётся явно — так их легко тестировать.
+// Curating the wave feed: removing repeats that the official client lets through.
+// Pure functions, state is passed explicitly, so they are easy to test.
 
 const DAY = 24 * 60 * 60 * 1000;
 
-// Маркеры «переделок» одной и той же песни, которыми забита выдача волны
+// Markers of "reworks" of the same song that the wave feed is full of
 const REWORK_WORDS = [
   "slowed",
   "slow",
@@ -32,10 +32,10 @@ const REWORK_WORDS = [
 ];
 const REWORK_RE = new RegExp(`\\b(${REWORK_WORDS.map((w) => w.replace(/\s+/g, "\\s*")).join("|")})\\b`, "i");
 
-/** Базовое название песни без пометок о переделке: «Song (Slowed + Reverb)» -> «song». */
+/** Base song title without rework marks: "Song (Slowed + Reverb)" -> "song". */
 export function baseTitle(title = "", version = "") {
   let s = `${title}`.toLowerCase();
-  // убираем скобки, если внутри есть маркер переделки
+  // strip brackets if they contain a rework marker
   s = s.replace(/[([{]([^)\]}]*)[)\]}]/g, (m, inner) => (REWORK_RE.test(inner) ? " " : m));
   // «Song - Sped Up», «Song x Something (hardtekk)»
   s = s.replace(/\s[-–—]\s.*$/, (m) => (REWORK_RE.test(m) ? " " : m));
@@ -44,10 +44,10 @@ export function baseTitle(title = "", version = "") {
   return s;
 }
 
-// Эти маркеры однозначны даже в самом названии; остальные (mix, edit, slow…) — только в пометках
+// These markers are unambiguous even in the title itself; the others (mix, edit, slow...) only in marks
 const STRONG_REWORK_RE = /\b(slowed|sped\s*up|speed\s*up|hardtekk|nightcore|bass\s*boost(ed)?|reverb)\b/i;
 
-/** Пометки трека: содержимое скобок, хвост после тире и поле version. */
+/** Track marks: bracket contents, the tail after a dash, and the version field. */
 function decorations(track) {
   const title = track.title || "";
   const parts = [...title.matchAll(/[([{]([^)\]}]*)[)\]}]/g)].map((m) => m[1]);
@@ -65,16 +65,16 @@ export function isRework(track) {
 export const songKey = (t) => `${(t.artists?.[0]?.name || "").toLowerCase()}|${baseTitle(t.title, t.version)}`;
 
 export const DEFAULT_CURATION = {
-  repeatWindowDays: 14, // не повторять трек, сыгранный за последние N дней
-  artistGap: 5, // минимум треков между двумя треками одного исполнителя
-  likedEvery: 8, // не чаще одного лайкнутого трека на N (0 = лайкнутые не пропускать)
-  skipReworks: false, // выкидывать slowed/sped up/hardtekk-переделки
-  dedupeSongs: true, // одна песня в разных версиях считается повтором
+  repeatWindowDays: 14, // don't repeat a track played in the last N days
+  artistGap: 5, // minimum tracks between two tracks by the same artist
+  likedEvery: 8, // at most one liked track per N (0 = don't skip liked)
+  skipReworks: false, // drop slowed/sped up/hardtekk reworks
+  dedupeSongs: true, // one song in different versions counts as a repeat
 };
 
 /**
- * @param candidates нормализованные треки от волны
- * @param ctx { history: Map<id, ts>, songHistory: Map<songKey, ts>, recent: Track[] (последние сыгранные, новые в конце),
+ * @param candidates normalized tracks from the wave
+ * @param ctx { history: Map<id, ts>, songHistory: Map<songKey, ts>, recent: Track[] (last played, newest at the end),
  *              liked: Set<id>, disliked: Set<id>, settings, now }
  * @returns { accepted: Track[], rejected: {track, reason}[] }
  */
@@ -86,7 +86,7 @@ export function curate(candidates, ctx) {
   const songHistory = ctx.songHistory || new Map();
   const liked = ctx.liked || new Set();
   const disliked = ctx.disliked || new Set();
-  // «лента» = недавно сыгранное + уже принятое в этом проходе
+  // "feed" = recently played + already accepted in this pass
   const tape = [...(ctx.recent || [])];
   const accepted = [];
   const rejected = [];
@@ -136,7 +136,7 @@ export function curate(candidates, ctx) {
         reject(t, "liked");
         continue;
       }
-      // likedEvery=1 — без ограничений (slice(-0) вернул бы всю ленту)
+      // likedEvery=1 means no limit (slice(-0) would return the whole feed)
       const window = s.likedEvery > 1 ? tape.slice(-(s.likedEvery - 1)) : [];
       if (window.some((x) => liked.has(x.id))) {
         reject(t, "liked-quota");

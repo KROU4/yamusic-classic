@@ -1,4 +1,4 @@
-// Набор SVG-иконок (24×24, currentColor).
+// SVG icon set (24×24, currentColor).
 const PATHS = {
   play: "M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z",
   pause: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z",

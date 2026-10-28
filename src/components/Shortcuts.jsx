@@ -1,4 +1,4 @@
-// Справка по горячим клавишам: открывается клавишей «?» или из настроек.
+// Keyboard shortcuts help: opened with the "?" key or from settings.
 import { useEffect } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { shortcutsOpen } from "../lib/ui.js";

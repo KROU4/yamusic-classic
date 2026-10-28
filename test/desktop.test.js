@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import zlib from "node:zlib";
 import { renderPng, SHAPES } from "../electron/png.js";
 
-describe("иконки панели задач", () => {
-  it("рисует валидный PNG с прозрачностью", () => {
+describe("taskbar icons", () => {
+  it("draws a valid PNG with transparency", () => {
     const png = renderPng(16, SHAPES.play);
     expect(png.subarray(1, 4).toString()).toBe("PNG");
-    // распаковываем IDAT и проверяем, что есть и прозрачные, и закрашенные пиксели
+    // unpack IDAT and check that there are both transparent and filled pixels
     const idatStart = png.indexOf("IDAT") + 4;
     const len = png.readUInt32BE(idatStart - 8);
     const raw = zlib.inflateSync(png.subarray(idatStart, idatStart + len));

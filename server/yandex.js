@@ -1,11 +1,11 @@
-// Клиент неофициального API Яндекс Музыки (api.music.yandex.net).
-// Эндпоинты и форматы сверены с бандлом официального клиента 5.124.1.
+// Client for the unofficial Yandex Music API (api.music.yandex.net).
+// Endpoints and formats are checked against the official client bundle 5.124.1.
 import { fileInfoSign, lyricsSign, nowSeconds } from "./sign.js";
 
 export const API_BASE = "https://api.music.yandex.net";
 export const CLIENT_ID = "YandexMusicDesktopAppWindows/5.124.1";
 
-// Порядок как в официальном клиенте: lossless-кодеки первыми
+// Same order as in the official client: lossless codecs first
 export const CODECS = ["flac", "flac-mp4", "aac-mp4", "he-aac-mp4", "mp3", "aac", "he-aac"];
 
 export class ApiError extends Error {
@@ -77,7 +77,7 @@ export class YandexMusic {
     return this.request("POST", url, opts);
   }
 
-  // ---- аккаунт ----
+  // ---- account ----
   async accountStatus() {
     const r = await this.get("/account/status");
     this.uid = r?.account?.uid ?? null;
@@ -87,7 +87,7 @@ export class YandexMusic {
     return this.get("/account/settings");
   }
 
-  // ---- главная ----
+  // ---- home ----
   landing(blocks) {
     return this.get("/landing3", { query: { blocks: blocks.join(",") } });
   }
@@ -101,7 +101,7 @@ export class YandexMusic {
     return this.get("/landing3/new-playlists");
   }
 
-  // ---- сущности ----
+  // ---- entities ----
   tracks(ids) {
     if (!ids.length) return Promise.resolve([]);
     return this.post("/tracks", { form: { "track-ids": ids.join(","), "with-positions": "true" } });
@@ -138,7 +138,7 @@ export class YandexMusic {
   createPlaylist(uid, title, visibility = "private") {
     return this.post(`/users/${uid}/playlists/create`, { form: { title, visibility } });
   }
-  /** Изменение состава плейлиста: diff — массив операций insert/delete, revision — текущая ревизия. */
+  /** Playlist content change: diff is an array of insert/delete operations, revision is the current revision. */
   changePlaylist(uid, kind, revision, diff) {
     return this.post(`/users/${uid}/playlists/${kind}/change-relative`, { form: { diff: JSON.stringify(diff), revision: String(revision) } });
   }
@@ -158,7 +158,7 @@ export class YandexMusic {
     return this.get("/music-history", { query: { fullModelsCount: 30 } });
   }
 
-  // ---- коллекция ----
+  // ---- collection ----
   likedTracks(uid) {
     return this.get(`/users/${uid}/likes/tracks`);
   }
@@ -183,8 +183,8 @@ export class YandexMusic {
     return this.post(`/users/${uid}/dislikes/tracks/${action}`, { form: { "track-ids": trackId } });
   }
 
-  // ---- воспроизведение ----
-  /** Прямая ссылка на аудио. transport=raw отдаёт незашифрованный файл, который браузер играет сам. */
+  // ---- playback ----
+  /** Direct audio link. transport=raw returns an unencrypted file that the browser plays itself. */
   async fileInfo(trackId, quality = "lossless", codecs = CODECS) {
     const ts = nowSeconds();
     const transports = ["raw"];
@@ -214,7 +214,7 @@ export class YandexMusic {
     return { text: await res.text(), format, writers: r.writers || [], major: r.major?.prettyName || null };
   }
 
-  /** Отчёт о прослушивании — без него Яндекс не видит историю и рекомендации деградируют. */
+  /** Listening report: without it Yandex doesn't see the history and recommendations degrade. */
   playAudio({ trackId, albumId, from, playId, totalPlayedSeconds, endPositionSeconds, trackLengthSeconds, uid }) {
     const now = new Date().toISOString();
     return this.post("/play-audio", {
@@ -234,7 +234,7 @@ export class YandexMusic {
     });
   }
 
-  // ---- волна (rotor) ----
+  // ---- wave (rotor) ----
   waveSettings() {
     return this.get("/rotor/wave/settings");
   }

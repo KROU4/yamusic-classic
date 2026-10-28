@@ -1,4 +1,4 @@
-// Мини-плеер: компактное окно поверх остальных (PulseSync-стиль), обложка с управлением.
+// Mini-player: compact always-on-top window (PulseSync style), cover art with controls.
 import { Icon } from "./Icon.jsx";
 import { Progress } from "./PlayerBar.jsx";
 import { ExplicitBadge } from "./TrackList.jsx";

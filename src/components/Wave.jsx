@@ -1,5 +1,5 @@
-// «Моя волна» в духе Яндекс Музыки 2023–2024: большой блок с генеративной анимацией,
-// «▶ Моя волна» по центру и настройки по занятию, характеру, настроению и языку. Без колеса.
+// My Wave in the spirit of Yandex Music 2023–2024: a large block with generative animation,
+// a centered «▶ Моя волна» and settings by activity, character, mood and language. No wheel.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
@@ -54,7 +54,7 @@ export async function loadWaveSettings() {
   return waveSettings.value;
 }
 
-/** Короткая подпись настроек: «Тренируюсь · Бодрое». Пусто — настройки по умолчанию. */
+/** Short settings caption: «Тренируюсь · Бодрое». Empty means default settings. */
 export function settingsSummary(s) {
   if (!s) return "";
   return Object.entries(OPTIONS)
@@ -83,7 +83,7 @@ function Settings({ onClose }) {
       clearTimeout(timer.current);
     };
   }, []);
-  // как в оригинале: выбор сразу перестраивает играющую волну (с паузой на случай нескольких кликов подряд)
+  // as in the original: a choice rebuilds the playing wave right away (with a delay in case of several clicks in a row)
   const set = (next) => {
     waveSettings.value = next;
     clearTimeout(timer.current);
@@ -144,7 +144,7 @@ export function WaveHero() {
   const t = isWave ? p.current.value : null;
   const s = waveSettings.value;
   const summary = settingsSummary(s);
-  // лайк текущего трека волны — вспышка анимации, как в официальном клиенте
+  // like on the current wave track — animation flash, as in the official client
   const liked = t ? p.isLiked(t) : false;
   const prevLiked = useRef(liked);
   const prevId = useRef(t?.id);
@@ -189,7 +189,7 @@ export function WaveHero() {
   );
 }
 
-/** Сетка станций: круглые цветные иконки жанров, настроений и занятий. */
+/** Station grid: round colored icons of genres, moods and activities. */
 export function StationGrid({ stations, limit }) {
   const list = limit ? stations.slice(0, limit) : stations;
   const ctx = p.context.value;

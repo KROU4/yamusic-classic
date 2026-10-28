@@ -1,4 +1,4 @@
-// Боковое меню в духе Яндекс Музыки 2023–2024: разделы, «Мне нравится» и закреплённое.
+// Sidebar in the spirit of Yandex Music 2023–2024: sections, «Мне нравится» and pinned items.
 import { useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { paletteFor } from "./VibeCanvas.jsx";

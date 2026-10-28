@@ -1,14 +1,14 @@
-// Менеджер волны поверх rotor/session: буфер уже отфильтрованных треков и фидбэк серверу.
+// Wave manager on top of rotor/session: a buffer of already filtered tracks and feedback to the server.
 import { normTrack } from "./normalize.js";
 import { curate } from "./curate.js";
 import { ApiError } from "./yandex.js";
 
-// Значения сидов настроек — как в «Настроить волну» классического интерфейса
+// Settings seed values match "Customize wave" in the classic UI
 export const WAVE_SETTINGS = {
   diversity: ["default", "favorite", "discover", "popular"],
   moodEnergy: ["all", "active", "fun", "calm", "sad"],
   language: ["any", "russian", "not-russian", "without-words"],
-  // «Занятие»: сид станции activity:* рядом с user:onyourwave — волна остаётся личной, но под занятие
+  // "Activity": an activity:* station seed next to user:onyourwave, the wave stays personal but fits the activity
   activity: ["any", "wake-up", "workout", "road-trip", "work-background", "study-background", "party", "fall-asleep"],
 };
 
@@ -45,7 +45,7 @@ export class WaveManager {
     const queue = history.tape.slice(-30).map((t) => t.id);
     const gen = (this.startGen = (this.startGen || 0) + 1);
     const r = await api.sessionNew({ seeds, queue, allowExplicit: this.prefs.allowExplicit, aiReduced: this.prefs.aiReduced });
-    // пока ждали ответ, пользователь запустил другую станцию — этот запуск устарел
+    // while waiting for the response, the user started another station: this launch is stale
     if (gen !== this.startGen) throw new ApiError("Запуск станции отменён более новым", 409);
     const session = (this.session = {
       id: r.radioSessionId,
@@ -58,16 +58,16 @@ export class WaveManager {
       description: r.descriptionSeed?.value || null,
     });
     this.stats = { fetched: 0, rejected: {} };
-    this.filling = null; // фоновое дозаполнение прежней станции к новой отношения не имеет
+    this.filling = null; // background refill of the previous station has nothing to do with the new one
     this.absorb(r.sequence);
     this.feedback("radioStarted", null).catch(() => {});
-    // сессия уже новая: сбой дозаполнения не должен ронять запуск, иначе клиент останется на старой волне
+    // the session is already new: a refill failure must not crash the launch, otherwise the client stays on the old wave
     try {
       await this.fill();
     } catch (e) {
       this.deps.log?.("wave fill failed", e.message);
     }
-    // id своей сессии, а не текущей: за время fill могла стартовать другая станция
+    // use the id of our own session, not the current one: another station may have started during fill
     return { sessionId: session.id, seeds, stationId };
   }
 
@@ -112,20 +112,20 @@ export class WaveManager {
     return p;
   }
 
-  /** Отдаёт следующие треки и в фоне дозаполняет буфер. */
+  /** Returns the next tracks and refills the buffer in the background. */
   async next(count = 3) {
     if (!this.session) await this.start();
     const s = this.session;
-    // ошибка дозаполнения не роняет выдачу: отдаём то, что уже есть в буфере
+    // a refill error doesn't break the response: return what is already in the buffer
     if (s.buffer.length < count) await this.fill().catch((e) => this.deps.log?.("wave fill failed", e.message));
-    // пока ждали, запустили другую станцию — её буфер не трогаем
+    // while waiting, another station was started: don't touch its buffer
     if (this.session !== s) throw new ApiError("Запуск станции отменён более новым", 409);
     const out = s.buffer.splice(0, count);
     this.fill().catch((e) => this.deps.log?.("wave fill failed", e.message));
     return out;
   }
 
-  /** События: radioStarted, trackStarted, trackFinished, skip, like, dislike. */
+  /** Events: radioStarted, trackStarted, trackFinished, skip, like, dislike. */
   async feedback(type, track, totalPlayedSeconds) {
     const s = this.session;
     if (!s) return;

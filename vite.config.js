@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 import preact from "@preact/preset-vite";
 
-// В dev-режиме /api проксируется на локальный бэкенд (scripts/dev.js выставляет YMC_API)
+// In dev mode /api is proxied to the local backend (scripts/dev.js sets YMC_API)
 export default defineConfig({
   plugins: [preact()],
   base: "./",

@@ -75,7 +75,7 @@ export function App() {
   useEffect(() => {
     load();
     player.restoreQueue();
-    // настройки звука живут на бэкенде — подтягиваем кроссфейд и выравнивание громкости
+    // audio settings live on the backend: pull in crossfade and loudness normalization
     api
       .get("/prefs")
       .then((p) => player.setAudioConfig({ crossfade: p.crossfade || 0, normalize: !!p.normalize }))

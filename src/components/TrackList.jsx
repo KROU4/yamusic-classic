@@ -86,8 +86,8 @@ function TrackRow({ track, i, list, ctx, showCover, numbered, chart, playlist })
 }
 
 /**
- * ctx: { title, from, link } — откуда включили, для отчётов и подписи в плеере.
- * playlist: { kind, onRemoved } — для своего плейлиста в меню появляется «Удалить из плейлиста».
+ * ctx: { title, from, link } — where playback was started from, for reports and the player caption.
+ * playlist: { kind, onRemoved } — for the user's own playlist, the menu gets «Удалить из плейлиста».
  */
 export function TrackList({ tracks, ctx = {}, showCover = true, numbered = false, chart = false, limit, playlist }) {
   const list = limit ? tracks.slice(0, limit) : tracks;

@@ -1,12 +1,12 @@
-// «Без цензуры»: как устроено ограничение в Яндекс Музыке и что с ним делает клиент.
+// "Uncensored": how the restriction works in Yandex Music and what the client does about it.
 //
-// 1. Волна. Сервер получает allowExplicit. Официальный клиент выставляет его по настройке
-//    «Фильтрация контента для взрослых»/детскому режиму; мы всегда шлём true (если не отключено).
-// 2. Подмена. Вместо оригинала отдаётся другой трек (clean-версия, лайв, кавер), оригинал при этом
-//    лежит в поле `substituted`. Если оригинал доступен — играем его.
-// 3. «Чистые» релизы (contentWarning=clean). Ищем explicit-версию той же песни того же артиста
-//    с близкой длительностью и подставляем её.
-// Слова в аудио «на лету» никто не вырезает: это отдельные мастер-версии от правообладателей.
+// 1. Wave. The server receives allowExplicit. The official client sets it from the setting
+//    "Adult content filtering"/kids mode; we always send true (unless disabled).
+// 2. Substitution. Another track (clean version, live, cover) is returned instead of the original, and the original
+//    is kept in the `substituted` field. If the original is available, we play it.
+// 3. "Clean" releases (contentWarning=clean). We look for an explicit version of the same song by the same artist
+//    with a close duration and substitute it.
+// Nobody cuts words out of the audio on the fly: these are separate master versions from rights holders.
 import { normTrack } from "./normalize.js";
 import { baseTitle } from "./curate.js";
 
@@ -19,7 +19,7 @@ export function preferOriginal(track) {
   return track;
 }
 
-/** Подходит ли кандидат как explicit-версия трека. */
+/** Whether the candidate fits as an explicit version of the track. */
 export function isExplicitTwin(track, candidate) {
   if (!candidate || candidate.id === track.id || !candidate.explicit || !candidate.available) return false;
   const mainArtist = track.artists[0]?.id;
@@ -44,16 +44,16 @@ export class Uncensor {
       const list = (r?.tracks?.results || []).map(normTrack).filter(Boolean);
       twin = list.find((c) => isExplicitTwin(track, c)) || null;
     } catch {
-      return null; // сетевую ошибку не кэшируем — в следующий раз попробуем снова
+      return null; // don't cache a network error: try again next time
     }
     this.cache.set(track.id, twin ? twin.id : null);
-    // кэш ограничен: самые старые записи вытесняются
+    // cache is bounded: the oldest entries are evicted
     while (this.cache.size > MAX_CACHE) this.cache.delete(this.cache.keys().next().value);
     this.store?.set("uncensorCache", Object.fromEntries(this.cache));
     return twin ? twin.id : null;
   }
 
-  /** Возвращает трек, который на самом деле нужно играть. */
+  /** Returns the track that should actually be played. */
   async resolve(track, { enabled = true } = {}) {
     if (!enabled || !track) return track;
     const original = preferOriginal(track);

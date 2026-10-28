@@ -1,4 +1,4 @@
-// Правые панели: синхронный текст песни и очередь воспроизведения.
+// Right-hand panels: synced lyrics and the playback queue.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { panel } from "./PlayerBar.jsx";

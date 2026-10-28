@@ -1,4 +1,4 @@
-// Эквалайзер на 10 полос с пресетами: панель (для настроек) и кнопка с выпадающей панелью (для плеера).
+// 10-band equalizer with presets: a panel (for settings) and a button with a dropdown panel (for the player).
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import * as g from "../player/audiograph.js";

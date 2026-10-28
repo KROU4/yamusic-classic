@@ -1,11 +1,11 @@
-// Закреплённое в боковом меню: плейлисты, альбомы, исполнители и настройки «Моей волны».
-// Хранится локально; порядок — от новых к старым, как в боковом меню Яндекс Музыки 2023 года.
+// Pinned items in the sidebar: playlists, albums, artists and My Wave settings.
+// Stored locally; order is newest first, like the Yandex Music 2023 sidebar.
 import { signal } from "@preact/signals";
 
 const KEY = "ymc-pins";
 const MAX = 30;
 
-/** Ключ закрепа: одна и та же сущность не закрепляется дважды. */
+/** Pin key: the same entity can't be pinned twice. */
 export function pinKey(p) {
   switch (p.type) {
     case "playlist":
@@ -38,7 +38,7 @@ function save(list) {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    // без сохранения
+    // without persistence
   }
 }
 
@@ -59,7 +59,7 @@ export function unpin(p) {
   save(pins.value.filter((x) => pinKey(x) !== key));
 }
 
-/** Перестановка перетаскиванием в боковом меню. */
+/** Reordering by drag in the sidebar. */
 export function movePin(from, to) {
   const list = [...pins.value];
   if (from === to || from < 0 || from >= list.length || to < 0 || to >= list.length) return;

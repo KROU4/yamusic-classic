@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import http from "node:http";
 import { createServer } from "../server/http.js";
 
-// Сервис-заглушка: проверяем только транспорт и защиту
+// Service stub: only transport and protection are checked
 const svc = {
   me: () => ({ authorized: true, login: "test" }),
   prefs: { theme: "dark" },
@@ -22,7 +22,7 @@ function request(port, path, { headers = {}, method = "GET", body } = {}) {
   });
 }
 
-describe("локальный HTTP-сервер", () => {
+describe("local HTTP server", () => {
   let srv;
   let port;
   const key = "a".repeat(48);
@@ -32,30 +32,30 @@ describe("локальный HTTP-сервер", () => {
   });
   afterAll(() => srv.close());
 
-  it("без ключа запуска — 403", async () => {
+  it("without a launch key — 403", async () => {
     const r = await request(port, "/api/me");
     expect(r.status).toBe(403);
   });
-  it("с неверным ключом — 403", async () => {
+  it("with a wrong key — 403", async () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": "b".repeat(48) } });
     expect(r.status).toBe(403);
   });
-  it("не-ASCII ключ той же длины в символах — 403, сервер не падает", async () => {
+  it("non-ASCII key of the same length in characters — 403, the server doesn't crash", async () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": "é".repeat(48) } });
     expect(r.status).toBe(403);
     const again = await request(port, "/api/me", { headers: { "x-ymc-key": key } });
     expect(again.status).toBe(200);
   });
-  it("с ключом — отвечает", async () => {
+  it("with a key — responds", async () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": key } });
     expect(r.status).toBe(200);
     expect(JSON.parse(r.body).login).toBe("test");
   });
-  it("чужой Host (DNS rebinding) — 421", async () => {
+  it("foreign Host (DNS rebinding) — 421", async () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": key, host: "evil.example:80" } });
     expect(r.status).toBe(421);
   });
-  it("POST с JSON", async () => {
+  it("POST with JSON", async () => {
     const r = await request(port, "/api/prefs", {
       method: "POST",
       headers: { "x-ymc-key": key, "content-type": "application/json" },
@@ -63,7 +63,7 @@ describe("локальный HTTP-сервер", () => {
     });
     expect(JSON.parse(r.body)).toEqual({ theme: "light" });
   });
-  it("статика: битый %-escape и выход из каталога не роняют сервер", async () => {
+  it("static files: a broken %-escape and escaping the directory don't crash the server", async () => {
     const fs = await import("node:fs");
     const os = await import("node:os");
     const path = await import("node:path");
@@ -79,7 +79,7 @@ describe("локальный HTTP-сервер", () => {
       await s2.close();
     }
   });
-  it("занятый желаемый порт — откат на свободный", async () => {
+  it("occupied desired port — fall back to a free one", async () => {
     const s2 = createServer({ svc, staticDir: null, key });
     const { port: p2 } = await s2.listen(port, { fallback: true });
     try {
@@ -89,7 +89,7 @@ describe("локальный HTTP-сервер", () => {
       await s2.close();
     }
   });
-  it("неизвестный маршрут — 404", async () => {
+  it("unknown route — 404", async () => {
     const r = await request(port, "/api/nope", { headers: { "x-ymc-key": key } });
     expect(r.status).toBe(404);
   });

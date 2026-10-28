@@ -14,23 +14,23 @@ const persisted = (key, fallback) => {
     try {
       localStorage.setItem(key, JSON.stringify(v));
     } catch {
-      // без сохранения
+      // without persistence
     }
   });
   return s;
 };
 
-/** Открыт ли полноэкранный «Сейчас играет». */
+/** Whether full-screen Now Playing is open. */
 export const nowPlayingOpen = signal(false);
 
-/** Открыта ли справка по горячим клавишам. */
+/** Whether the keyboard shortcuts help is open. */
 export const shortcutsOpen = signal(false);
 
-/** Анимация «Моей волны»: full — шейдер, реагирующий на музыку; lite — лёгкая CSS-анимация; off — статичный фон. */
+/** My Wave animation: full — shader reacting to music; lite — light CSS animation; off — static background. */
 export const vibeMode = persisted("ymc-vibe-mode", "full");
 
-/** Свёрнутое боковое меню (только иконки). */
+/** Collapsed sidebar (icons only). */
 export const sidebarCollapsed = persisted("ymc-sidebar-collapsed", false);
 
-/** Вкладка главной: «Для вас» или «Тренды». */
+/** Home tab: «Для вас» or «Тренды». */
 export const homeTab = persisted("ymc-home-tab", "foryou");

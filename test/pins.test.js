@@ -5,18 +5,18 @@ const album = { type: "album", id: "1", title: "A" };
 const artist = { type: "artist", id: "2", title: "B" };
 const wave = { type: "wave", title: "Спокойное", settings: { activity: "any", diversity: "default", moodEnergy: "calm", language: "any" } };
 
-describe("закрепы бокового меню", () => {
+describe("sidebar pins", () => {
   beforeEach(() => {
     pins.value = [];
   });
 
-  it("ключ не зависит от названия и обложки", () => {
+  it("key doesn't depend on title and cover", () => {
     expect(pinKey(album)).toBe(pinKey({ ...album, title: "другое", cover: "x" }));
     expect(pinKey({ type: "playlist", uid: "u", kind: "3" })).toBe("playlist:u:3");
     expect(pinKey(wave)).not.toBe(pinKey({ ...wave, settings: { ...wave.settings, moodEnergy: "sad" } }));
   });
 
-  it("повторный клик открепляет, новые закрепы сверху", () => {
+  it("repeated click unpins, new pins go on top", () => {
     expect(togglePin(album)).toBe(true);
     expect(togglePin(artist)).toBe(true);
     expect(pins.value.map((p) => p.id)).toEqual(["2", "1"]);
@@ -25,13 +25,13 @@ describe("закрепы бокового меню", () => {
     expect(isPinned(album)).toBe(false);
   });
 
-  it("перестановка и удаление", () => {
+  it("reordering and removal", () => {
     togglePin(album);
     togglePin(artist);
     togglePin(wave);
     movePin(0, 2);
     expect(pins.value.map((p) => p.type)).toEqual(["artist", "album", "wave"]);
-    movePin(5, 0); // за пределами — без изменений
+    movePin(5, 0); // out of range: no changes
     expect(pins.value).toHaveLength(3);
     unpin(artist);
     expect(pins.value.map((p) => p.type)).toEqual(["album", "wave"]);

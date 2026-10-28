@@ -1,5 +1,5 @@
-// Локальный HTTP-сервер: API для интерфейса + раздача собранного фронтенда.
-// Слушает только 127.0.0.1, требует ключ запуска и проверяет Host (защита от DNS rebinding).
+// Local HTTP server: API for the UI + serving the built frontend.
+// Listens on 127.0.0.1 only, requires a launch key and checks Host (DNS rebinding protection).
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -29,7 +29,7 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-/** IANA-пояс из запроса (Europe/Moscow); всё подозрительное отбрасываем — тогда считаем по смещению tz. */
+/** IANA zone from the request (Europe/Moscow); anything suspicious is dropped, then we use the tz offset. */
 function zoneParam(v) {
   return typeof v === "string" && v.length <= 64 && /^[A-Za-z0-9_+\-/]+$/.test(v) ? v : null;
 }
@@ -87,7 +87,7 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
 
     const url = new URL(req.url, "http://local");
     if (url.pathname.startsWith("/api/")) {
-      // сравниваем длины в байтах: не-ASCII заголовок даёт другой размер буфера, и timingSafeEqual бросил бы исключение
+      // compare lengths in bytes: a non-ASCII header gives a different buffer size, and timingSafeEqual would throw
       const given = Buffer.from(String(req.headers["x-ymc-key"] || ""));
       const expected = Buffer.from(key);
       const ok = given.length === expected.length && crypto.timingSafeEqual(given, expected);
@@ -105,7 +105,7 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
       }
     }
 
-    // статика собранного фронтенда, SPA-фолбэк на index.html
+    // static files of the built frontend, SPA fallback to index.html
     if (!staticDir) return send(404, "no static");
     let rel;
     try {
@@ -120,7 +120,7 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
     const ext = path.extname(file);
     const cache = ext === ".html" ? "no-store" : "public, max-age=31536000, immutable";
     res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream", "Cache-Control": cache });
-    // ошибка чтения (файл удалили между проверкой и открытием) не должна ронять процесс
+    // a read error (file deleted between the check and open) must not crash the process
     fs.createReadStream(file)
       .on("error", () => res.destroy())
       .pipe(res);
@@ -129,7 +129,7 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
   return {
     key,
     server,
-    /** port — желаемый порт; если он занят и fallback=true, берётся случайный свободный. */
+    /** port is the desired port; if it's taken and fallback=true, a random free one is used. */
     listen(port = 0, { fallback = false } = {}) {
       return new Promise((resolve, reject) => {
         const onError = (err) => {

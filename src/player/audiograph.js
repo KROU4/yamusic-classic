@@ -1,6 +1,6 @@
-// Звуковой граф Web Audio: эквалайзер и анализатор частот для анимации волны.
-// Работает только в оболочке Electron: она добавляет CORS-заголовок к ответам аудио-CDN Яндекса,
-// без него MediaElementSource отдаёт тишину. В обычном браузере граф не строится, звук идёт напрямую.
+// Web Audio sound graph: equalizer and frequency analyzer for the wave animation.
+// Works only in the Electron shell: it adds a CORS header to responses from Yandex's audio CDN,
+// without which MediaElementSource outputs silence. In a regular browser the graph isn't built and audio plays directly.
 import { signal } from "@preact/signals";
 
 export const BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
@@ -25,7 +25,7 @@ function readEq() {
     const v = JSON.parse(localStorage.getItem(LS_KEY));
     if (v && Array.isArray(v.gains) && v.gains.length === BANDS.length) return { enabled: !!v.enabled, preset: v.preset || "custom", gains: v.gains.map(clampDb) };
   } catch {
-    // повреждённое значение — берём настройки по умолчанию
+    // corrupted value — use the default settings
   }
   return { enabled: false, preset: "flat", gains: [...EQ_PRESETS.flat.gains] };
 }
@@ -34,9 +34,9 @@ function clampDb(v) {
 }
 
 export const eq = signal(readEq());
-/** Граф собран и звук реально идёт через него (эквалайзер и реакция анимации на музыку доступны). */
+/** The graph is built and sound actually flows through it (equalizer and the animation's reaction to music are available). */
 export const graphReady = signal(false);
-// window.ymcDesktop читаем напрямую: lib/desktop.js сам импортирует движок плеера
+// read window.ymcDesktop directly: lib/desktop.js itself imports the player engine
 export const webAudioSupported = !!window.ymcDesktop && typeof AudioContext !== "undefined";
 
 let ctx = null;
@@ -44,7 +44,7 @@ let preamp = null;
 let filters = [];
 let analyser = null;
 let freq = null;
-const sources = new WeakMap(); // элемент -> { src, gain }
+const sources = new WeakMap(); // element -> { src, gain }
 
 function build() {
   if (ctx || !webAudioSupported) return ctx;
@@ -73,14 +73,14 @@ function build() {
   return ctx;
 }
 
-/** Готовит новый аудиоэлемент: CORS-режим ставится до src, источник графа создаётся один раз на элемент. */
+/** Prepares a new audio element: CORS mode is set before src, the graph source is created once per element. */
 export function prepare(el) {
   if (!webAudioSupported) return;
   el.crossOrigin = "anonymous";
   if (!build() || sources.has(el)) return;
   try {
-    // громкость элемента Chromium к выходу MediaElementSource не применяет — у каждого элемента свой GainNode.
-    // Анализатор подключён до громкости: анимация реагирует на музыку и при тихом звуке
+    // Chromium doesn't apply an element's volume to the MediaElementSource output — each element has its own GainNode.
+    // The analyzer is tapped before the volume stage: the animation reacts to music even at low volume
     const src = ctx.createMediaElementSource(el);
     const gain = ctx.createGain();
     gain.gain.value = el.volume;
@@ -88,11 +88,11 @@ export function prepare(el) {
     src.connect(analyser);
     sources.set(el, { src, gain });
   } catch {
-    // элемент уже подключён к другому контексту — играет мимо графа
+    // the element is already connected to another context — it plays bypassing the graph
   }
 }
 
-/** Элемент больше не нужен (кроссфейд завершён): отключаем его от графа. */
+/** The element is no longer needed (crossfade finished): disconnect it from the graph. */
 export function release(el) {
   const node = sources.get(el);
   if (!node) return;
@@ -100,12 +100,12 @@ export function release(el) {
     node.src.disconnect();
     node.gain.disconnect();
   } catch {
-    // уже отключён
+    // already disconnected
   }
   sources.delete(el);
 }
 
-/** Громкость элемента 0..1: через граф, если элемент к нему подключён, иначе обычным свойством volume. */
+/** Element volume 0..1: through the graph if the element is connected to it, otherwise via the plain volume property. */
 export function setVolume(el, v) {
   const node = sources.get(el);
   if (!node) {
@@ -113,7 +113,7 @@ export function setVolume(el, v) {
     return;
   }
   el.volume = 1;
-  // короткое сглаживание убирает щелчки при перетаскивании ползунка; шаги кроссфейда идут раз в 50 мс
+  // a short smoothing removes clicks when dragging the slider; crossfade steps come every 50 ms
   node.gain.gain.setTargetAtTime(v, ctx.currentTime, 0.015);
 }
 
@@ -122,7 +122,7 @@ export function getVolume(el) {
   return node ? node.gain.gain.value : el.volume;
 }
 
-/** Контекст мог уснуть (система, долгая пауза) — будим на каждом старте воспроизведения. */
+/** The context may have fallen asleep (system, long pause) — wake it on every playback start. */
 export function resume() {
   if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
 }
@@ -133,7 +133,7 @@ function applyEq() {
   const g = enabled ? gains : BANDS.map(() => 0);
   const t = ctx.currentTime;
   filters.forEach((f, i) => f.gain.setTargetAtTime(g[i], t, 0.03));
-  // запас по громкости: самый сильный подъём компенсируется, чтобы не было клиппинга
+  // headroom: the strongest boost is compensated to avoid clipping
   const headroom = Math.max(0, ...g);
   preamp.gain.setTargetAtTime(10 ** (-headroom / 20), t, 0.03);
 }
@@ -145,7 +145,7 @@ export function setEq(patch) {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify(next));
   } catch {
-    // без сохранения
+    // without persistence
   }
   applyEq();
 }
@@ -167,13 +167,13 @@ const avg = (a, from, to) => {
   return s / Math.max(1, to - from) / 255;
 };
 
-/** Уровни бас/середина/верх 0..1 для визуализации; null, если анализ недоступен. */
+/** Bass/mid/treble levels 0..1 for visualization; null if analysis is unavailable. */
 export function levels() {
   if (!analyser || ctx.state !== "running") return null;
   analyser.getByteFrequencyData(freq);
-  const hz = ctx.sampleRate / analyser.fftSize; // ширина одного бина
+  const hz = ctx.sampleRate / analyser.fftSize; // width of one bin
   const bin = (f) => Math.min(freq.length, Math.max(1, Math.round(f / hz)));
-  // сырые средние у громкого мастеринга почти всегда у потолка — растягиваем рабочий диапазон
+  // raw averages for loud masters sit almost always at the ceiling — stretch the working range
   const norm = (v, floor, top) => Math.max(0, Math.min(1, (v - floor) / (top - floor)));
   const bass = norm(avg(freq, bin(30), bin(160)), 0.35, 0.98);
   const mid = norm(avg(freq, bin(160), bin(2000)), 0.2, 0.8);

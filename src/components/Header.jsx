@@ -1,4 +1,4 @@
-// Верхняя панель: навигация назад/вперёд и поиск с подсказками.
+// Top bar: back/forward navigation and search with suggestions.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { route, go } from "../lib/router.js";
@@ -77,7 +77,7 @@ function Search() {
   );
 }
 
-/** Верхняя панель над страницей: назад/вперёд и поиск. Разделы и профиль — в боковом меню. */
+/** Top bar above the page: back/forward and search. Sections and profile live in the sidebar. */
 export function Topbar() {
   return (
     <div class="topbar">

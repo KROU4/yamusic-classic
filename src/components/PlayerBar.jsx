@@ -1,4 +1,4 @@
-// Нижняя панель плеера: трек слева, управление и прогресс по центру, дополнительные кнопки справа.
+// Bottom player bar: track on the left, controls and progress in the center, extra buttons on the right.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
@@ -106,7 +106,7 @@ const SLEEP_OPTIONS = [
   ["track", "До конца трека"],
 ];
 
-/** Таймер сна: кнопка с луной и выпадающий список. */
+/** Sleep timer: moon button with a dropdown list. */
 function SleepTimer() {
   const [open, setOpen] = useState(false);
   const [, tick] = useState(0);
@@ -118,7 +118,7 @@ function SleepTimer() {
     window.addEventListener("pointerdown", onDown, true);
     return () => window.removeEventListener("pointerdown", onDown, true);
   }, [open]);
-  // обновляем оставшееся время раз в 15 секунд, пока таймер активен
+  // refresh the remaining time every 15 seconds while the timer is active
   useEffect(() => {
     if (st?.mode !== "time") return;
     const id = setInterval(() => tick((x) => x + 1), 15000);

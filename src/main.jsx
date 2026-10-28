@@ -1,5 +1,5 @@
 import { render } from "preact";
-import "./lib/api.js"; // первым: забирает ключ запуска из адреса
+import "./lib/api.js"; // first: grabs the launch key from the address
 import "./lib/theme.js";
 import { isDesktop, stepZoom } from "./lib/desktop.js";
 import "./styles/app.css";
@@ -7,7 +7,7 @@ import { App } from "./app.jsx";
 import { shortcutsOpen } from "./lib/ui.js";
 import * as player from "./player/engine.js";
 
-// Масштаб: Ctrl+плюс/минус/0 (в приложении; в браузере это делает сам браузер)
+// Zoom: Ctrl+plus/minus/0 (in the app; in the browser the browser handles it itself)
 window.addEventListener("keydown", (e) => {
   if (!isDesktop || !e.ctrlKey || e.altKey) return;
   if (e.key === "=" || e.key === "+") stepZoom(1);
@@ -17,7 +17,7 @@ window.addEventListener("keydown", (e) => {
   e.preventDefault();
 });
 
-// Назад/вперёд: Alt+стрелки и боковые кнопки мыши, как в браузере
+// Back/forward: Alt+arrows and the mouse side buttons, like in a browser
 window.addEventListener("keydown", (e) => {
   if (!e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.code === "ArrowLeft") history.back();
@@ -28,7 +28,7 @@ window.addEventListener("mouseup", (e) => {
   if (e.button === 4) history.forward();
 });
 
-// Горячие клавиши плеера (не срабатывают при вводе текста)
+// Player hotkeys (don't fire while typing)
 window.addEventListener("keydown", (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return;

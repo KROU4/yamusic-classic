@@ -1,4 +1,4 @@
-// Запуск без Electron: `npm run serve` — открыть напечатанный адрес в браузере.
+// Run without Electron: `npm run serve`, then open the printed address in a browser.
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";

@@ -1,4 +1,4 @@
-// Прикладной слой: всё, что интерфейс может попросить у бэкенда.
+// Application layer: everything the UI can ask of the backend.
 import path from "node:path";
 import crypto from "node:crypto";
 import { YandexMusic, ApiError } from "./yandex.js";
@@ -12,18 +12,18 @@ import { getLyrics } from "./lyrics.js";
 import { PlayLog, computeStats } from "./stats.js";
 
 export const DEFAULT_PREFS = {
-  allowExplicit: true, // не просить у волны «чистую» выдачу
-  uncensor: true, // подставлять оригинал вместо подменённого/clean-трека
-  aiReduced: true, // меньше ИИ-музыки в волне (заголовок как в официальном клиенте)
+  allowExplicit: true, // don't ask the wave for "clean" output
+  uncensor: true, // substitute the original for a replaced/clean track
+  aiReduced: true, // less AI music in the wave (header as in the official client)
   quality: "lossless",
   lyricsPrefer: "auto",
   curation: DEFAULT_CURATION,
   wave: { diversity: "default", moodEnergy: "all", language: "any" },
   theme: "dark",
   volume: 0.8,
-  crossfade: 0, // секунды наложения треков, 0 — выключено
-  normalize: false, // выравнивание громкости по R128
-  // оболочка Windows
+  crossfade: 0, // seconds of track overlap, 0 = off
+  normalize: false, // R128 loudness normalization
+  // Windows shell
   closeToTray: false,
   autostart: false,
   startMinimized: false,
@@ -53,7 +53,7 @@ export class Service {
       log,
     });
     this.cache = new Map();
-    this.playlistLocks = new Map(); // kind -> хвост цепочки правок этого плейлиста
+    this.playlistLocks = new Map(); // kind -> tail of this playlist's edit chain
   }
 
   get prefs() {
@@ -74,12 +74,12 @@ export class Service {
     return next;
   }
 
-  /** Подписка на изменение настроек (Electron применяет автозапуск, хоткеи). */
+  /** Subscription to settings changes (Electron applies autostart, hotkeys). */
   onPrefs(fn) {
     this.prefListeners.push(fn);
   }
 
-  // ---------- сессия ----------
+  // ---------- session ----------
   async init() {
     const validate = async (token) => {
       const probe = new YandexMusic({ token, fetchImpl: this.fetch });
@@ -151,7 +151,7 @@ export class Service {
     return tracks.map((t) => ({ ...t, liked: this.library.liked.has(t.id), disliked: this.library.disliked.has(t.id) }));
   }
 
-  // ---------- главная ----------
+  // ---------- home ----------
   async home() {
     this.requireAuth();
     return this.cached("home", 5 * 60 * 1000, async () => {
@@ -217,7 +217,7 @@ export class Service {
     return albums.map(normAlbum);
   }
 
-  // ---------- сущности ----------
+  // ---------- entities ----------
   async search(q, type = "all") {
     this.requireAuth();
     const r = await this.api.search(q, type, 0);
@@ -273,8 +273,8 @@ export class Service {
     this.requireAuth();
     const r = await this.api.playlist(uid, kind);
     const entries = r.tracks || [];
-    // rich-tracks иногда возвращает только id — догружаем, сохраняя исходный порядок:
-    // индекс на экране должен совпадать с позицией в плейлисте (удаление трека бьёт по индексу)
+    // rich-tracks sometimes returns only ids: load the rest, keeping the original order:
+    // the on-screen index must match the position in the playlist (deleting a track goes by index)
     const missing = entries.filter((x) => !x.track).map((x) => String(x.id));
     const loaded = missing.length ? new Map((await this.fullTracks(missing)).map((t) => [t.id, t])) : new Map();
     const tracks = entries.map((x) => (x.track ? normTrack(x.track) : loaded.get(String(x.id)) || null)).filter(Boolean);
@@ -311,7 +311,7 @@ export class Service {
     return { tracks: this.decorate((r?.similarTracks || []).map(normTrack).filter(Boolean)) };
   }
 
-  // ---------- воспроизведение ----------
+  // ---------- playback ----------
   async resolvePlay(track) {
     this.requireAuth();
     const prefs = this.prefs;
@@ -345,10 +345,10 @@ export class Service {
     return { disliked };
   }
 
-  /** Трек доигран или пропущен: локальная история (анти-повтор) + отчёт Яндексу. */
+  /** Track finished or skipped: local history (anti-repeat) + report to Yandex. */
   async played({ track, from, playedSeconds, durationSeconds, playId }) {
     this.requireAuth();
-    // в историю анти-повтора попадает и пропущенное: раз трек промотали, слышать его снова скоро не хочется
+    // skipped tracks also go into the anti-repeat history: if a track was skipped, the user doesn't want to hear it again soon
     if (playedSeconds >= 3) {
       this.history.record(track, songKey(track));
       this.playlog.add(track, playedSeconds);
@@ -367,13 +367,13 @@ export class Service {
     return { ok: true };
   }
 
-  // ---------- волна ----------
+  // ---------- wave ----------
   async waveStart({ stationId, settings }) {
     this.requireAuth();
     const s = settings || this.prefs.wave;
     if (!stationId || stationId === "user:onyourwave") this.setPrefs({ wave: s });
     const info = await this.wave.start({ stationId: stationId || "user:onyourwave", settings: s });
-    // пока шёл запуск, могла стартовать другая станция: её буфер этому запросу не отдаём
+    // another station may have started while this one was launching: don't hand its buffer to this request
     const session = this.wave.session;
     const stale = () => this.wave.session !== session || session?.id !== info.sessionId;
     if (stale()) throw new ApiError("Запуск станции отменён более новым", 409);
@@ -397,20 +397,20 @@ export class Service {
     return { options: WAVE_SETTINGS, current: this.prefs.wave, info: this.wave.info() };
   }
 
-  // ---------- статистика ----------
+  // ---------- statistics ----------
   async stats(days = 7, tzOffsetMin = 0, timeZone = null) {
     const s = computeStats(this.playlog.entries, { days, tzOffsetMin, timeZone });
-    // топ-треки догружаем целиком, чтобы их можно было сразу включить из статистики
+    // load top tracks in full so they can be played right from the statistics
     if (this.account && s.topTracks.length) {
       const full = await this.fullTracks(s.topTracks.map((t) => t.id)).catch(() => []);
       const byId = new Map(this.decorate(full).map((t) => [t.id, t]));
-      // не догрузилось — оставляем минимальный играбельный трек из журнала, а не теряем его из топа
+      // couldn't load: keep a minimal playable track from the log instead of dropping it from the top
       s.topTracks = s.topTracks.map((t) => (byId.has(t.id) ? { ...byId.get(t.id), plays: t.plays, seconds: t.seconds } : this.decorate([Service.logTrack(t)])[0]));
     }
     return s;
   }
 
-  /** Трек из записи журнала в форме normTrack — когда полные данные получить не удалось. */
+  /** Track from a log entry in normTrack form, for when full data couldn't be fetched. */
   static logTrack(t) {
     return {
       id: t.id,
@@ -431,7 +431,7 @@ export class Service {
     };
   }
 
-  // ---------- свои плейлисты ----------
+  // ---------- own playlists ----------
   async myPlaylists() {
     this.requireAuth();
     const list = await this.api.userPlaylists(this.api.uid);
@@ -443,7 +443,7 @@ export class Service {
     const name = String(title || "").trim().slice(0, 100) || "Новый плейлист";
     const pl = await this.api.createPlaylist(this.api.uid, name);
     this.cache.delete("home");
-    // плейлист уже создан: ошибку добавления отдаём отдельно, иначе повтор плодит дубликаты
+    // the playlist is already created: report the add error separately, otherwise a retry creates duplicates
     let addError = null;
     if (tracks.length) {
       try {
@@ -456,12 +456,12 @@ export class Service {
     return { playlist: normPlaylist(pl), addError };
   }
 
-  /** Правки одного плейлиста идут строго по очереди: каждая берёт свежую ревизию после предыдущей. */
+  /** Edits of a single playlist go strictly in order: each takes a fresh revision after the previous one. */
   withPlaylistLock(kind, fn) {
     const key = String(kind);
     const prev = this.playlistLocks.get(key) || Promise.resolve();
     const run = prev.then(fn);
-    // ошибка одной правки не рвёт цепочку для следующих
+    // one edit's error doesn't break the chain for the following ones
     const tail = run.catch(() => {});
     this.playlistLocks.set(key, tail);
     tail.then(() => {
@@ -476,7 +476,7 @@ export class Service {
     if (!items.length) throw new ApiError("Нечего добавлять", 400);
     return this.withPlaylistLock(kind, async () => {
       const pl = await this.api.playlist(this.api.uid, kind);
-      // новые треки в конец плейлиста, как в классическом клиенте
+      // new tracks go to the end of the playlist, as in the classic client
       const diff = [{ op: "insert", at: pl.trackCount || 0, tracks: items }];
       const r = await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
       return { playlist: normPlaylist(r), added: items.length };
@@ -487,7 +487,7 @@ export class Service {
     this.requireAuth();
     return this.withPlaylistLock(kind, async () => {
       const pl = await this.api.playlist(this.api.uid, kind);
-      // позицию берём из актуального плейлиста: индекс на экране мог устареть
+      // take the position from the current playlist: the on-screen index may be stale
       const at = (pl.tracks || []).findIndex((x, i) => String(x.id) === String(track.id) && (index == null || i === index));
       const pos = at >= 0 ? at : (pl.tracks || []).findIndex((x) => String(x.id) === String(track.id));
       if (pos < 0) throw new ApiError("Трека уже нет в плейлисте", 404);

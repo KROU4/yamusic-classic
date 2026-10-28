@@ -1,4 +1,4 @@
-// Полноэкранный «Сейчас играет»: большая обложка на размытом фоне в цвете трека + синхронный текст.
+// Full-screen Now Playing: large cover on a blurred background in the track's color + synced lyrics.
 import { useEffect } from "preact/hooks";
 import { Icon } from "./Icon.jsx";
 import { nowPlayingOpen } from "../lib/ui.js";
@@ -17,15 +17,15 @@ export function NowPlaying() {
   useEffect(() => {
     if (!open) return;
     const hide = () => (nowPlayingOpen.value = false);
-    // Esc при открытом контекстном меню закрывает только меню (наш обработчик срабатывает раньше, menu ещё задан)
+    // Esc with a context menu open closes only the menu (our handler runs first, menu is still set)
     const onKey = (e) => {
       if (e.key !== "Escape" || menu.value) return;
       hide();
     };
     window.addEventListener("keydown", onKey);
-    // переход изнутри (исполнитель, «Перейти к альбому») — сворачиваемся, иначе новая страница скрыта под нами
+    // navigation from inside (artist, «Перейти к альбому») collapses us, otherwise the new page stays hidden beneath
     window.addEventListener("hashchange", hide);
-    // клик по ссылке внутри (исполнитель) сворачивает сразу, даже если адрес совпадает с текущим
+    // a click on an inner link (artist) collapses immediately, even if the address matches the current one
     const onClick = (e) => e.target.closest?.(".np a[href^=\"#\"]") && hide();
     document.addEventListener("click", onClick, true);
     return () => {
@@ -43,7 +43,7 @@ export function NowPlaying() {
     <div class="np" role="dialog" aria-label="Сейчас играет" style={{ "--np-accent": t.color || "#333" }}>
       <div class="np-bg" style={cover ? { backgroundImage: `url(${cover})` } : undefined} />
       <div class="np-shade" />
-      {/* во время волны за обложкой живёт её анимация */}
+      {/* during a wave its animation lives behind the cover */}
       {ctx?.type === "wave" && <VibeCanvas colors={paletteFor(ctx.settings)} active />}
       <button class="icon-btn np-close" onClick={() => (nowPlayingOpen.value = false)} aria-label="Свернуть" title="Свернуть (Esc)">
         <Icon name="down" size={22} />

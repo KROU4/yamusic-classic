@@ -1,11 +1,11 @@
-// Рисует build/icon.png (256×256): жёлтый круг с тёмным треугольником «play». Без зависимостей.
+// Draws build/icon.png (256×256): a yellow circle with a dark "play" triangle. No dependencies.
 import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import { fileURLToPath } from "node:url";
 
 const SIZE = 256;
-const SS = 4; // суперсэмплинг для сглаживания краёв
+const SS = 4; // supersampling for edge smoothing
 
 function crc32(buf) {
   let c = ~0;
@@ -26,7 +26,7 @@ function chunk(type, data) {
 }
 
 const inTriangle = (x, y) => {
-  // треугольник, смещённый вправо для оптического центра
+  // triangle shifted right for optical centering
   const ax = 98, ay = 72, bx = 98, by = 184, cx = 190, cy = 128;
   const s = (px, py, qx, qy, rx, ry) => (px - rx) * (qy - ry) - (qx - rx) * (py - ry);
   const d1 = s(x, y, ax, ay, bx, by), d2 = s(x, y, bx, by, cx, cy), d3 = s(x, y, cx, cy, ax, ay);
@@ -59,7 +59,7 @@ for (let y = 0; y < SIZE; y++) {
 const ihdr = Buffer.alloc(13);
 ihdr.writeUInt32BE(SIZE, 0);
 ihdr.writeUInt32BE(SIZE, 4);
-ihdr[8] = 8; // глубина
+ihdr[8] = 8; // bit depth
 ihdr[9] = 6; // RGBA
 const png = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

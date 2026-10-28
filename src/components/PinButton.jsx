@@ -1,4 +1,4 @@
-// Кнопка «Закрепить в боковом меню» для страниц альбома, исполнителя и плейлиста.
+// «Закрепить в боковом меню» button for album, artist and playlist pages.
 import { Icon } from "./Icon.jsx";
 import { isPinned, togglePin } from "../lib/pins.js";
 import { toast } from "../lib/toast.js";

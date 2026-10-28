@@ -1,4 +1,4 @@
-/* YM Classic — оформление в духе Яндекс Музыки 2023–2024: боковое меню и анимированная «Моя волна», без колеса. */
+/* YM Classic — styling in the spirit of Yandex Music 2023–2024: sidebar and animated My Wave, no wheel. */
 :root {
   --font: "YS Text", "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   --accent: #ffdb4d;
@@ -99,7 +99,7 @@ h3 {
   font-weight: 400;
 }
 
-/* ---------- раскладка: боковое меню | страница (+ правая панель), плеер снизу ---------- */
+/* ---------- layout: sidebar | page (+ right panel), player at the bottom ---------- */
 .layout {
   height: 100%;
   display: grid;
@@ -135,7 +135,7 @@ h3 {
   border: 2px solid var(--bg);
 }
 
-/* ---------- боковое меню ---------- */
+/* ---------- sidebar ---------- */
 .sidebar {
   grid-row: 1;
   grid-column: 1;
@@ -407,7 +407,7 @@ h3 {
   border: 2px solid var(--sidebar-bg);
 }
 
-/* ---------- верхняя панель страницы ---------- */
+/* ---------- page top bar ---------- */
 .topbar {
   position: sticky;
   top: 0;
@@ -478,7 +478,7 @@ h3 {
   background: var(--bg-hover);
 }
 
-/* ---------- кнопки ---------- */
+/* ---------- buttons ---------- */
 .icon-btn {
   width: 36px;
   height: 36px;
@@ -556,7 +556,7 @@ h3 {
   font-weight: 500;
 }
 
-/* ---------- секции и карточки ---------- */
+/* ---------- sections and cards ---------- */
 .section {
   margin-top: 40px;
 }
@@ -660,7 +660,7 @@ h3 {
   overflow: hidden;
 }
 
-/* ---------- «Моя волна»: генеративный блок ---------- */
+/* ---------- My Wave: generative block ---------- */
 .vibe {
   position: relative;
   min-height: clamp(340px, 46vh, 460px);
@@ -691,7 +691,7 @@ h3 {
 .vibe-canvas canvas.vibe-fallback + .vibe-lite {
   display: block;
 }
-/* лёгкий режим: три размытых пятна палитры медленно плавают; статичный — те же пятна без движения */
+/* light mode: three blurred palette blobs drift slowly; static — the same blobs without motion */
 .vibe-lite {
   position: absolute;
   inset: 0;
@@ -875,7 +875,7 @@ h3 {
   color: var(--accent);
 }
 
-/* ---------- вкладки главной ---------- */
+/* ---------- home tabs ---------- */
 .home-tabs {
   display: flex;
   gap: 8px;
@@ -898,7 +898,7 @@ h3 {
   background: var(--bg-elev-2);
 }
 
-/* ---------- станции (настроения и жанры) ---------- */
+/* ---------- stations (moods and genres) ---------- */
 .subtabs {
   display: flex;
   gap: 6px;
@@ -980,7 +980,7 @@ h3 {
   color: var(--text);
 }
 
-/* ---------- список треков ---------- */
+/* ---------- track list ---------- */
 .tracklist {
   display: flex;
   flex-direction: column;
@@ -1062,7 +1062,7 @@ h3 {
   opacity: 0;
   transition: opacity 0.12s;
 }
-/* строки без обложки (альбом): кнопка встаёт на место номера, не сдвигая название */
+/* rows without a cover (album): the button takes the number's place without shifting the title */
 .track:not(:has(.track-cover)) .track-lead {
   min-width: 26px;
 }
@@ -1174,7 +1174,7 @@ h3 {
   gap: 16px;
 }
 
-/* ---------- шапки страниц ---------- */
+/* ---------- page headers ---------- */
 .page-title {
   font-size: 34px;
   margin-bottom: 8px;
@@ -1247,7 +1247,7 @@ h3 {
   flex-wrap: wrap;
 }
 
-/* ---------- плеер ---------- */
+/* ---------- player ---------- */
 .player {
   grid-row: 2;
   grid-column: 1 / -1;
@@ -1510,7 +1510,7 @@ h3 {
   background: var(--accent);
 }
 
-/* ---------- правая панель ---------- */
+/* ---------- right panel ---------- */
 .side-panel {
   width: 380px;
   flex-shrink: 0;
@@ -1661,7 +1661,7 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- настройки ---------- */
+/* ---------- settings ---------- */
 .settings-group {
   margin-top: 32px;
   max-width: 860px;
@@ -1741,7 +1741,7 @@ h3 {
   transform: translateX(18px);
 }
 
-/* ---------- прочее ---------- */
+/* ---------- misc ---------- */
 .spinner {
   width: 22px;
   height: 22px;
@@ -1809,7 +1809,7 @@ h3 {
   background: var(--ph);
 }
 
-/* ---------- контекстное меню и поповеры ---------- */
+/* ---------- context menu and popovers ---------- */
 .menu,
 .popover {
   position: fixed;
@@ -1989,7 +1989,7 @@ h3 {
   height: 72px;
 }
 
-/* ---------- очередь: перетаскивание ---------- */
+/* ---------- queue: drag and drop ---------- */
 .q-item {
   cursor: grab;
   position: relative;
@@ -2011,14 +2011,14 @@ h3 {
   bottom: -1px;
 }
 
-/* ---------- «Сейчас играет» ---------- */
+/* ---------- Now Playing ---------- */
 .np {
   position: fixed;
   inset: 0;
   z-index: 40;
   overflow: hidden;
   color: #fff;
-  background: #0b0b0b; /* края размытого фона прозрачные — под ними не должна просвечивать страница */
+  background: #0b0b0b; /* the edges of the blurred background are transparent — the page must not show through beneath them */
   animation: np-in 0.28s var(--ease);
   --text: #fff;
   --text-2: rgba(255, 255, 255, 0.7);
@@ -2155,7 +2155,7 @@ h3 {
   padding: 30vh 0;
 }
 
-/* ---------- мини-плеер ---------- */
+/* ---------- mini-player ---------- */
 .mini {
   height: 100vh;
   display: flex;
@@ -2226,7 +2226,7 @@ h3 {
   margin-top: auto;
 }
 
-/* ---------- статистика ---------- */
+/* ---------- statistics ---------- */
 .stats-head {
   display: flex;
   align-items: flex-end;
@@ -2350,7 +2350,7 @@ h3 {
   margin-top: 40px;
 }
 
-/* ---------- адаптив ---------- */
+/* ---------- responsive ---------- */
 @media (max-width: 1100px) {
   .stats-charts {
     grid-template-columns: 1fr;
@@ -2385,7 +2385,7 @@ h3 {
   }
 }
 
-/* ---------- эквалайзер ---------- */
+/* ---------- equalizer ---------- */
 .eq-popover {
   width: 460px;
   max-width: calc(100vw - 32px);
@@ -2463,7 +2463,7 @@ h3 {
   max-width: 560px;
 }
 
-/* ---------- окно справки ---------- */
+/* ---------- help window ---------- */
 .modal-scrim {
   position: fixed;
   inset: 0;
@@ -2537,7 +2537,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* «Сейчас играет» во время волны: анимация под обложкой */
+/* Now Playing during a wave: animation under the cover */
 .np .vibe-canvas {
   z-index: 0;
   opacity: 0.6;
@@ -2548,7 +2548,7 @@ kbd {
   z-index: 1;
 }
 
-/* узкое окно: боковое меню само становится компактным */
+/* narrow window: the sidebar itself becomes compact */
 @media (max-width: 1000px) {
   .sidebar:not(.is-collapsed) {
     width: 72px;

@@ -1,11 +1,11 @@
-// Мост renderer → оболочка. Наружу торчат только узкие методы, без доступа к Node.
+// Bridge renderer -> shell. Only narrow methods are exposed, with no Node access.
 const { contextBridge, ipcRenderer, webFrame } = require("electron");
 
 contextBridge.exposeInMainWorld("ymcDesktop", {
-  /** Состояние плеера: кнопки на панели задач, трей. */
+  /** Player state: taskbar buttons, tray. */
   state: (s) => ipcRenderer.send("ymc:state", s),
-  /** Переключить мини-плеер. */
+  /** Toggle the mini player. */
   setMini: (on) => ipcRenderer.send("ymc:mini", !!on),
-  /** Масштаб интерфейса 0.75–1.5. */
+  /** UI zoom 0.75–1.5. */
   setZoom: (f) => webFrame.setZoomFactor(Math.max(0.75, Math.min(1.5, Number(f) || 1))),
 });

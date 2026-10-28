@@ -1,4 +1,4 @@
-// Контекстное меню трека: правый клик по строке или кнопка «…».
+// Track context menu: right-click on a row or the "…" button.
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
@@ -15,7 +15,7 @@ export function openTrackMenu(e, track, extra = {}) {
   e.preventDefault();
   e.stopPropagation();
   const r = e.currentTarget?.getBoundingClientRect?.();
-  // из кнопки «…» меню открывается под ней, из правого клика — у курсора
+  // opened from the "…" button, the menu appears below it; from a right click, at the cursor
   const x = e.type === "contextmenu" || !r ? e.clientX : r.right;
   const y = e.type === "contextmenu" || !r ? e.clientY : r.bottom;
   menu.value = { x, y, track, ...extra, seq: ++menuSeq };
@@ -24,7 +24,7 @@ let menuSeq = 0;
 
 const close = () => (menu.value = null);
 
-// переход из меню сворачивает «Сейчас играет»: адрес может и не измениться (тот же альбом), hashchange тогда не придёт
+// navigating from the menu collapses Now Playing: the address may stay the same (same album), so no hashchange fires
 const goTo = (path) => {
   nowPlayingOpen.value = false;
   go(path);
@@ -35,7 +35,7 @@ function PlaylistPicker({ track, onDone }) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const input = useRef(null);
-  // autoFocus срабатывает не всегда, а без фокуса нажатия уходят в глобальные горячие клавиши
+  // autoFocus doesn't always fire, and without focus key presses go to the global hotkeys
   useEffect(() => {
     if (creating) input.current?.focus();
   }, [creating]);
@@ -64,7 +64,7 @@ function PlaylistPicker({ track, onDone }) {
     try {
       const r = await api.post("/my/playlists", { title: name || "Новый плейлист", tracks: [track] });
       dropCache("/collection");
-      // плейлист мог создаться, а трек в него — не добавиться (сервер сообщает addError)
+      // the playlist may be created while adding the track fails (the server reports addError)
       if (r.addError) toast(`Плейлист «${r.playlist.title}» создан, но трек не добавился: ${r.addError}`);
       else toast(`Создан плейлист «${r.playlist.title}»`);
     } catch (err) {
@@ -97,7 +97,7 @@ function PlaylistPicker({ track, onDone }) {
   );
 }
 
-/** Каждое открытие — новый экземпляр (key), поэтому позиция и подменю сбрасываются сами. */
+/** Each opening is a new instance (key), so position and submenu reset on their own. */
 export function ContextMenu() {
   const m = menu.value;
   return m ? <MenuBody key={m.seq} m={m} /> : null;
@@ -108,7 +108,7 @@ function MenuBody({ m }) {
   const [pos, setPos] = useState(null);
   const [sub, setSub] = useState(false);
 
-  // меню не должно вылезать за край окна: позиция считается от точки открытия по текущему размеру меню
+  // the menu must not overflow the window edge: position is computed from the opening point and the current menu size
   const place = () => {
     if (!box.current) return;
     const r = box.current.getBoundingClientRect();
@@ -117,9 +117,9 @@ function MenuBody({ m }) {
     const next = { x: Math.max(8, x), y: Math.max(8, y) };
     setPos((p) => (p && p.x === next.x && p.y === next.y ? p : next));
   };
-  // первый расчёт до отрисовки, чтобы меню не мигнуло не на своём месте
+  // first measurement before paint so the menu doesn't flash in the wrong place
   useLayoutEffect(place, []);
-  // и при любом изменении размера: раскрыли подменю, догрузился список плейлистов, открылась форма
+  // and on any size change: submenu expanded, playlist list finished loading, form opened
   useEffect(() => {
     if (!box.current || typeof ResizeObserver === "undefined") return;
     const ro = new ResizeObserver(place);

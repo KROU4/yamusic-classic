@@ -1,4 +1,4 @@
-// Обращения к локальному бэкенду. Ключ запуска приходит в адресе (#k=...) и хранится в sessionStorage.
+// Calls to the local backend. The launch key arrives in the address (#k=...) and is kept in sessionStorage.
 
 function readKey() {
   const m = location.hash.match(/(?:^#|&)k=([a-f0-9]+)/);
@@ -6,7 +6,7 @@ function readKey() {
     try {
       sessionStorage.setItem("ymc-key", m[1]);
     } catch {
-      // приватный режим — живём без сохранения
+      // private mode — live without persistence
     }
     history.replaceState(null, "", location.pathname + location.search + "#/");
     return m[1];
@@ -19,7 +19,7 @@ function readKey() {
 }
 
 let KEY = readKey();
-// ключ может прийти и после загрузки страницы (смена хеша без перезагрузки)
+// the key may arrive after the page loads (hash change without reload)
 window.addEventListener("hashchange", () => {
   if (/(?:^#|&)k=/.test(location.hash)) {
     KEY = readKey();
@@ -37,7 +37,7 @@ export class HttpError extends Error {
 async function call(method, path, body, { keepalive = false } = {}) {
   const res = await fetch(`/api${path}`, {
     method,
-    keepalive, // запрос переживёт закрытие страницы
+    keepalive, // the request outlives page close
     headers: { "x-ymc-key": KEY, ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -51,7 +51,7 @@ export const api = {
   post: (path, body = {}, opts) => call("POST", path, body, opts),
 };
 
-/** Простой кэш страниц на время сессии: повторный заход на страницу — мгновенный. */
+/** Simple page cache for the session: revisiting a page is instant. */
 const pageCache = new Map();
 export async function cachedGet(path, ttlMs = 120000) {
   const hit = pageCache.get(path);

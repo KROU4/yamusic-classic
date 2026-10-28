@@ -1,4 +1,4 @@
-// Настройки: подборка (анти-повтор), без цензуры, звук, окно, оформление, аккаунт.
+// Settings: curation (anti-repeat), uncensored, sound, window, appearance, account.
 import { useEffect, useState } from "preact/hooks";
 import { api, dropCache } from "../lib/api.js";
 import { toast } from "../lib/toast.js";

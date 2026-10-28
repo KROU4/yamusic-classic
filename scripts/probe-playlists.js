@@ -1,5 +1,5 @@
-// Живая проверка операций с плейлистами: создаёт приватный тестовый плейлист,
-// добавляет и удаляет трек, переименовывает и удаляет плейлист. `node scripts/probe-playlists.js`
+// Live check of playlist operations: creates a private test playlist,
+// adds and removes a track, renames and deletes the playlist. `node scripts/probe-playlists.js`
 import os from "node:os";
 import path from "node:path";
 import { Service } from "../server/service.js";

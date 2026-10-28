@@ -1,4 +1,4 @@
-// Поиск, коллекция, чарт, новинки, радио.
+// Search, collection, chart, new releases, radio.
 import { useState } from "preact/hooks";
 import { useLoad } from "../lib/useLoad.js";
 import { TrackList } from "../components/TrackList.jsx";
@@ -29,7 +29,7 @@ export function SearchPage({ q }) {
         <Section title="Лучший результат">
           <div class="best">
             {best.type === "track" && (
-              // лучший трек играет вместе с остальными результатами, а не в одиночку
+              // the best track plays together with the other results, not alone
               <TrackList tracks={[best.item, ...data.tracks.filter((t) => t.id !== best.item.id)]} ctx={ctx} limit={1} />
             )}
             {best.type === "album" && <Row><AlbumCard album={best.item} /></Row>}

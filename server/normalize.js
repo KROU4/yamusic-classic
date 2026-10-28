@@ -1,4 +1,4 @@
-// Приведение ответов API к компактным объектам для интерфейса.
+// Converts API responses into compact objects for the UI.
 
 export function coverUrl(uri, size = 200) {
   if (!uri) return null;
@@ -27,10 +27,10 @@ export function normTrack(t) {
       sync: !!t.lyricsInfo?.hasAvailableSyncLyrics,
       text: !!t.lyricsInfo?.hasAvailableTextLyrics,
     },
-    // Яндекс подменяет трек «чистой» или региональной версией, а оригинал кладёт сюда
+    // Yandex swaps the track for a "clean" or regional version and puts the original here
     substituted: t.substituted ? normTrack(t.substituted) : null,
     color: t.derivedColors?.accent || null,
-    // интегральная громкость (LUFS) — для выравнивания громкости между треками
+    // integrated loudness (LUFS), used to even out volume between tracks
     loudness: typeof t.r128?.i === "number" ? t.r128.i : null,
   };
 }

@@ -1,13 +1,13 @@
-// Поиск OAuth-сессии, уже созданной официальным клиентом Яндекс Музыки.
-// Значение токена никогда не логируется и не отдаётся в renderer:
-// оно живёт только в памяти серверного процесса.
+// Finding the OAuth session already created by the official Yandex Music client.
+// The token value is never logged or sent to the renderer:
+// it lives only in the memory of the server process.
 import fs from "node:fs";
 import path from "node:path";
 
 const TOKEN_RE = /y0_[A-Za-z0-9_-]{30,}/g;
 const TOKEN_LENGTHS = [53, 58];
 
-/** Каталоги Local Storage официального приложения (и стабильной, и beta-сборки). */
+/** Local Storage directories of the official app (both stable and beta builds). */
 export function officialStorageDirs(env = process.env) {
   const appData = env.APPDATA || (env.HOME ? path.join(env.HOME, ".config") : "");
   if (!appData) return [];
@@ -17,9 +17,9 @@ export function officialStorageDirs(env = process.env) {
 }
 
 /**
- * Достаёт кандидатов из файлов LevelDB.
- * LevelDB дописывает новые значения в конец самого свежего .log,
- * поэтому порядок такой: свежие файлы раньше, внутри файла последние вхождения раньше.
+ * Extracts candidates from LevelDB files.
+ * LevelDB appends new values to the end of the newest .log,
+ * so the order is: newest files first, and within a file the latest occurrences first.
  */
 export function extractCandidates(files) {
   const ordered = [...files].sort((a, b) => b.mtimeMs - a.mtimeMs || b.name.localeCompare(a.name));
@@ -29,8 +29,8 @@ export function extractCandidates(files) {
     const text = file.content.toString("latin1");
     const matches = [...text.matchAll(TOKEN_RE)].map((m) => m[0]).reverse();
     for (const match of matches) {
-      // за значением в LevelDB могут сразу идти ASCII-байты следующей записи —
-      // поэтому кроме совпадения целиком пробуем и типичные длины токена
+      // ASCII bytes of the next record may follow the value in LevelDB right away,
+      // so besides the exact match we also try typical token lengths
       const variants = [match, ...TOKEN_LENGTHS.filter((n) => match.length > n).map((n) => match.slice(0, n))];
       for (const token of variants) {
         if (!seen.has(token)) {
@@ -58,7 +58,7 @@ export function readCandidatesFromDisk(dirs = officialStorageDirs()) {
       try {
         files.push({ name, mtimeMs: fs.statSync(full).mtimeMs, content: fs.readFileSync(full) });
       } catch {
-        // файл может быть заблокирован запущенным приложением — пропускаем
+        // the file may be locked by the running app: skip it
       }
     }
   }
@@ -66,8 +66,8 @@ export function readCandidatesFromDisk(dirs = officialStorageDirs()) {
 }
 
 /**
- * Выбирает первый рабочий токен. validate(token) -> Promise<account|null>.
- * Источники по приоритету: YM_TOKEN из окружения, сохранённый вручную, официальное приложение.
+ * Picks the first working token. validate(token) -> Promise<account|null>.
+ * Sources by priority: YM_TOKEN from the environment, one saved manually, the official app.
  */
 export async function resolveSession({ validate, stored = null, env = process.env, dirs } = {}) {
   const sources = [];

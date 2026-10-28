@@ -1,5 +1,5 @@
-// Живая проверка бэкенда на реальной сессии: `node scripts/smoke.js`.
-// Печатает только сводки — никаких токенов.
+// Live backend check on a real session: `node scripts/smoke.js`.
+// Prints only summaries, no tokens.
 import os from "node:os";
 import path from "node:path";
 import { Service } from "../server/service.js";

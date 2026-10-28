@@ -1,4 +1,4 @@
-// Главная в духе Яндекс Музыки 2023–2024: «Моя волна» сверху, ниже вкладки «Для вас» и «Тренды».
+// Home in the spirit of Yandex Music 2023–2024: My Wave on top, below it the «Для вас» and «Тренды» tabs.
 import { useState } from "preact/hooks";
 import { useLoad } from "../lib/useLoad.js";
 import { homeTab } from "../lib/ui.js";

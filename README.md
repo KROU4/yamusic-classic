@@ -1,25 +1,76 @@
 # YM Classic
 
-Неофициальный open-source клиент Яндекс Музыки для Windows в классическом дизайне: без колеса, без огромной анимированной «Моей волны» и без повторов в подборке.
+An unofficial open-source Yandex Music desktop client for Windows. It recreates the Yandex Music design of 2023–2024: a sidebar, an animated "My Wave" hero and no genre wheel. It also fixes the most common complaints about the official app: repeats in recommendations, censored tracks and lyrics, and a slow, heavy UI.
 
-> Проект не связан с Яндексом. Нужна подписка или аккаунт Яндекс Музыки и установленное официальное приложение, из которого берётся вход.
+> Not affiliated with Yandex. You need a Yandex Music account. The client signs in with the session of the official Yandex Music app installed on the same computer, so the official app has to be logged in once.
 
-## Что умеет
+The user interface is in Russian, like the service it is built for. The code, comments and docs are in English.
 
-- **Вход без логина.** Клиент берёт сессию из официального приложения Яндекс Музыки на этом компьютере. Токен живёт только в памяти локального сервера.
-- **Классический интерфейс.** Шапка с разделами «Главное / Радио / Чарт / Новинки / Коллекция», компактный блок «Моя волна» и старое окно «Настроить волну» (характер, настроение, язык). На главной: «Собрано для вас», чарт, новые релизы, сетка «Настроения и жанры». Отдельная страница радио с круглыми иконками станций. Тёмная и светлая темы.
-- **Подборка без повторов.** Локальная история прослушиваний (трек не вернётся N дней), дистанция между треками одного артиста, slowed / sped up / hardtekk-версии считаются одной песней, ограничение доли лайкнутых треков, меньше ИИ-музыки. Плюс полноценный фидбэк волне.
-- **Без цензуры.** Explicit-выдача волны (`allowExplicit`), оригинал вместо подменённого трека, поиск explicit-версии для clean-релизов, полный текст из LRCLIB, если текст Яндекса с цензурой.
-- **Тексты.** Синхронные, с подсветкой строки и перемоткой по клику. Источники: Яндекс Музыка, LRCLIB.
-- **Плеер.** Очередь с перетаскиванием (играть следующим, в конец, убрать), перемешивание, повтор, «Моя волна по треку» и «по исполнителю». **Кроссфейд** (настоящее наложение треков, 3–12 с), **выравнивание громкости** по R128, **таймер сна** (15 мин – 1,5 ч или «до конца трека», с мягким затуханием). Системные медиа-клавиши и плашка Windows (SMTC), горячие клавиши, сохранение громкости и очереди **без автозапуска** при старте.
-- **«Сейчас играет».** Клик по обложке в плеере открывает полноэкранный режим: большая обложка на размытом фоне в цвете трека и синхронный текст-караоке рядом.
-- **Контекстное меню трека** (правый клик или «…»): в очередь, волна по треку, добавить в плейлист (с созданием нового прямо в меню), перейти к альбому или исполнителю, лайк и дизлайк, ссылка на трек.
-- **Свои плейлисты.** Создать, переименовать, удалить, добавить и убрать треки.
-- **Моя статистика.** Время прослушивания, серия дней подряд, графики по дням и времени суток, любимые исполнители и самые частые треки за неделю, месяц, квартал или год. Считается локально.
-- **Интеграция с Windows** (как в PulseSync): мини-плеер поверх окон, кнопки ⏮ ⏯ ⏭ на миниатюре в панели задач, трей с текущим треком, сворачивание в трей при закрытии, автозапуск и запуск свёрнутым, глобальные горячие клавиши (Ctrl+Alt+P / ← / → / ↑ / ↓ / L), **статус в Discord** (нужен Application ID своего приложения Discord).
-- **Быстро.** Окно появляется примерно через 0,5 с, фронтенд весит 74 КБ (у официального клиента — около 47 МБ веб-бандла). Повторный заход на страницы мгновенный, позиция прокрутки сохраняется.
+## Features
 
-## Запуск
+**Design**
+- A 2023-era layout. The sidebar holds the sections (Home, Chart, New releases, Radio, Collection, Stats), "Liked" and your pinned items. It can collapse to icons.
+- **My Wave hero.**
+  - A generative, audio-reactive animation on its own WebGL shader: a glowing ring breathes with the bass and ripples outward.
+  - The colours follow the selected mood or activity, and liking a track makes the ring flash.
+  - Three modes: full, lite (CSS only) and off.
+  - It pauses when off-screen or minimised.
+- **Wave settings like in 2023.** Activity (waking up, workout, on the road, working, studying, party, falling asleep), character, mood and language. Changes apply live to the playing wave, and any combination can be pinned to the sidebar.
+- **Pins.** Pin playlists, albums, artists and wave settings to the sidebar, then reorder them by dragging.
+- The home page has "For you" and "Trends" tabs, with genres, moods, activities and epochs.
+- A centred player bar, a full-screen "Now playing" view with karaoke lyrics (the wave animation plays behind it), a mini player, and dark and light themes.
+
+**Sound**
+- A **10-band equalizer** with presets, routed through a Web Audio graph. Boosts are offset by a preamp, so they don't clip.
+- **Crossfade** of 3–12 s with equal-power curves.
+- **Loudness normalisation** by EBU R128. Loud tracks are attenuated and quiet ones boosted by up to +4 dB.
+- **Playback speed** from 0.5× to 2×. Pitch stays the same.
+- A **sleep timer** for 15 min – 1.5 h or until the end of the track, with a soft fade.
+
+**Recommendations without repeats**
+- A local play history: a track is not repeated for N days.
+- A minimum distance between tracks by the same artist.
+- Slowed, sped-up and hardtekk versions count as the same song.
+- A cap on how many tracks come from "Liked".
+- A request for less AI-generated music.
+- Full wave feedback and play reports, so Yandex's own recommendations keep learning.
+
+**No censorship**
+- The explicit wave feed (`allowExplicit`).
+- The original track instead of a substituted one.
+- An explicit twin for "clean" releases.
+- Full synced lyrics from [LRCLIB](https://lrclib.net) when Yandex's lyrics are censored.
+
+**Library**
+- A track context menu: queue, wave by track, add to playlist (or create one in place), go to album or artist, like or dislike, copy link.
+- Create, rename and delete your own playlists, and remove tracks from them.
+- A drag-and-drop queue.
+- **My stats**, computed locally: listening time, streak, charts by day and by hour, top artists and top tracks.
+
+**Windows integration**
+- Thumbnail toolbar buttons, a tray icon showing the current track, and close to tray.
+- Autostart, optionally minimised.
+- Global hotkeys:
+  - Ctrl+Alt+P: pause or play;
+  - Ctrl+Alt+← / →: previous or next track;
+  - Ctrl+Alt+↑ / ↓: volume;
+  - Ctrl+Alt+L: like.
+- System media keys and the SMTC overlay.
+- UI zoom from 75% to 150%. Press `?` to see every shortcut.
+
+**Fast.** The window opens in about 0.5 s. The UI bundle is about 125 KB of JS and 37 KB of CSS, while the official app ships a ~47 MB web bundle. Revisited pages load instantly, and scroll positions are kept.
+
+## Download
+
+Prebuilt binaries are attached to [GitHub Releases](../../releases):
+
+- `YM-Classic-Setup-<version>.exe`: the installer.
+- `YM-Classic-<version>-portable.exe`: a single exe that needs no installation.
+- `SHA256SUMS.txt`: checksums for both.
+
+The binaries are unsigned. Windows SmartScreen may ask you to confirm the first launch.
+
+## Build from source
 
 ```bash
 npm install
@@ -29,61 +80,68 @@ npm install
 npm start
 ```
 
-`npm start` собирает интерфейс и открывает окно Electron.
-
-Другие команды:
-
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `npm run dev` | Бэкенд и интерфейс без Electron. Адрес с ключом печатается в консоли, открыть в браузере |
-| `npm test` | Юнит-тесты (подписи, поиск сессии, анти-повтор, LRC, uncensor, защита HTTP) |
-| `node scripts/smoke.js` | Живая проверка бэкенда на вашей сессии (печатает только сводки) |
-| `npm run dist` | Установщик и portable-exe в `release/` |
+| `npm start` | Builds the UI and opens the Electron window |
+| `npm run dev` | Backend and UI without Electron. The URL, including its key, is printed to the console |
+| `npm test` | Unit tests: signatures, session lookup, anti-repeat rules, LRC, uncensor, HTTP hardening, stats, pins |
+| `npm run dist` | Builds the installer and the portable exe into `release/` |
+| `node scripts/smoke.js` | Live backend check against your own session. It prints summaries only, never the token |
 
-Если `npm install` не скачал Electron (npm 11 блокирует install-скрипты), выполните:
+If `npm install` did not download Electron (npm 11 blocks install scripts), run `npm approve-scripts electron`.
 
-```bash
-npm approve-scripts electron
+## Releases (CI)
+
+`.github/workflows/release.yml` builds on `windows-latest`:
+
+1. It runs the tests.
+2. It runs `vite build`, then `electron-builder --win` (NSIS installer and portable exe).
+3. It writes `SHA256SUMS.txt`.
+4. It creates or updates the GitHub release for the tag.
+
+There are two ways to trigger it:
+
+- Push a tag:
+
+  ```bash
+  git tag v0.2.0
+  git push origin v0.2.0
+  ```
+
+- Or run the **Release** workflow manually with a version number.
+
+The version in `package.json` is set from the tag. `.github/workflows/ci.yml` runs the tests and the UI build on every push and pull request to `main`.
+
+## How it works
+
+```
+electron/main.js      window, tray, mini player, taskbar buttons, hotkeys, autostart,
+                      CORS header for the audio CDN (enables Web Audio), smoke mode (YMC_SHOTS)
+electron/preload.cjs  narrow renderer → shell bridge (player state, mini mode, zoom)
+server/               local backend on 127.0.0.1:47819 (falls back to a free port; YMC_PORT overrides),
+                      reachable only with the per-launch key and a Host check
+  token.js            finds the official app's session
+  yandex.js           API client (request signatures in sign.js)
+  wave.js             My Wave sessions with a buffer of filtered tracks
+  curate.js           anti-repeat rules
+  uncensor.js         originals instead of substitutes, explicit twins
+  lyrics.js           Yandex and LRCLIB lyrics
+  stats.js            local play log and stats
+src/                  Preact + signals UI
+  player/engine.js    playback, queue, crossfade, sleep timer, wave continuation
+  player/audiograph.js  Web Audio graph: per-element gain, EQ, analyser
+  components/VibeCanvas.jsx  the My Wave shader
 ```
 
-## Горячие клавиши
+Notes on the official client, request signatures, how the censorship works and the audio quality: [docs/RESEARCH.md](docs/RESEARCH.md).
 
-Пробел — пауза · ←/→ — перемотка на 10 с · Shift+←/→ — трек назад или вперёд · ↑/↓ — громкость · L — лайк · Ctrl+F или / — поиск.
+## Limitations
 
-## Как это устроено
+- Audio quality tops out at 192 kbps AAC. The official app gets lossless as an encrypted stream, and this client deliberately does not decrypt it.
+- If a track's audio file was replaced with an edited one on the server, the original cannot be recovered.
+- Podcasts and audiobooks, Ynison (remote control from another device) and offline downloads are not supported.
+- The equalizer and the audio-reactive animation work only in the desktop app. In a plain browser the audio CDN does not allow cross-origin analysis, so the animation falls back to an idle "breathing" mode.
 
-```
-electron/main.js   окно, трей, мини-плеер, кнопки панели задач, хоткеи, автозапуск, smoke-режим (YMC_SHOTS)
-electron/discord.js  Discord Rich Presence через локальный IPC без зависимостей
-electron/preload.cjs узкий мост renderer → оболочка (состояние плеера, мини-режим)
-server/            локальный бэкенд на 127.0.0.1:47819 (если порт занят — любой свободный; YMC_PORT меняет),
-                   доступ только с ключом запуска и проверкой Host
-  token.js         поиск сессии официального приложения
-  yandex.js        клиент API (подписи — sign.js)
-  wave.js          сессии «Моей волны» с буфером отфильтрованных треков
-  curate.js        правила анти-повтора
-  uncensor.js      оригинал вместо подмены, explicit-версии
-  lyrics.js        тексты Яндекса и LRCLIB
-  stats.js         локальный журнал прослушиваний и расчёт статистики
-src/               интерфейс на Preact и signals
-```
-
-Подробности разбора официального клиента, подписей, механики цензуры и качества: [docs/RESEARCH.md](docs/RESEARCH.md).
-
-## Ограничения
-
-- Качество — до 192 кбит/с AAC: lossless официальный клиент получает зашифрованным потоком, расшифровку клиент не реализует.
-- Если Яндекс заменил аудиофайл трека отредактированным прямо на сервере, оригинал вернуть нельзя.
-- Подкасты, книги, Ynison (управление с другого устройства) и офлайн-скачивание пока не поддерживаются.
-- Выравнивание громкости только приглушает громкие треки: усиливать тихие `<audio>` не умеет.
-- Для статуса в Discord нужно один раз создать своё приложение на discord.com/developers и вписать его Application ID в настройках.
-
-## Discord: как включить статус
-
-1. Откройте https://discord.com/developers/applications и нажмите «New Application». Название (например, «YM Classic») станет заголовком статуса.
-2. Скопируйте **Application ID** со страницы General Information.
-3. В YM Classic откройте «Настройки → Окно и Windows», включите «Статус в Discord» и вставьте ID. Discord должен быть запущен на этом компьютере.
-
-## Лицензия
+## License
 
 MIT.
