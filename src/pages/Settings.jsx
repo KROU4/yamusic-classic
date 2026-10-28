@@ -164,6 +164,20 @@ export function SettingsPage({ me, onReconnect }) {
       <section class="settings-group">
         <h2>Звук</h2>
         <Choice
+          label="Качество"
+          hint="«Без потерь» — FLAC там, где он есть у трека (нужна подписка Плюс), иначе AAC 192. Применяется со следующего трека"
+          value={prefs.quality === "lq" || prefs.quality === "nq" ? prefs.quality : "lossless"}
+          options={[
+            ["lq", "Экономия · 64 кбит/с"],
+            ["nq", "Обычное · 192 кбит/с"],
+            ["lossless", "Без потерь · FLAC"],
+          ]}
+          onChange={(v) => {
+            save({ quality: v });
+            player.forgetResolved();
+          }}
+        />
+        <Choice
           label="Кроссфейд"
           hint="Плавное наложение конца трека на начало следующего"
           value={prefs.crossfade}

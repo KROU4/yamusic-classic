@@ -243,8 +243,11 @@ export function PlayerBar() {
           </span>
         )}
         {st && (
-          <span class="player-quality" title={`${st.codec}, ${st.bitrate} кбит/с`}>
-            {st.codec === "flac" || st.codec === "flac-mp4" ? "FLAC" : `${st.bitrate}`}
+          <span
+            class={`player-quality ${st.quality === "lossless" ? "hq" : ""}`}
+            title={st.codec === "local" ? "Играет ваш файл вместо звука Яндекса" : `${st.codec}, ${st.bitrate} кбит/с`}
+          >
+            {st.codec === "local" ? "Свой файл" : st.codec === "flac" || st.codec === "flac-mp4" ? "FLAC" : `${st.bitrate}`}
           </span>
         )}
         {p.rate.value !== 1 && (

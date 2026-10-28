@@ -1,7 +1,9 @@
 // Application layer: everything the UI can ask of the backend.
 import path from "node:path";
 import crypto from "node:crypto";
-import { YandexMusic, ApiError } from "./yandex.js";
+import fs from "node:fs";
+import { YandexMusic, ApiError, CODECS } from "./yandex.js";
+import { MediaRegistry, audioMime } from "./media.js";
 import { resolveSession } from "./token.js";
 import { JsonStore, PlayHistory } from "./store.js";
 import { normTrack, normAlbum, normArtist, normPlaylist, normStation, coverUrl } from "./normalize.js";
@@ -15,7 +17,7 @@ export const DEFAULT_PREFS = {
   allowExplicit: true, // don't ask the wave for "clean" output
   uncensor: true, // substitute the original for a replaced/clean track
   aiReduced: true, // less AI music in the wave (header as in the official client)
-  quality: "lossless",
+  quality: "lossless", // lq | nq | lossless (FLAC where the track has it, otherwise AAC 192)
   lyricsPrefer: "auto",
   curation: DEFAULT_CURATION,
   wave: { diversity: "default", moodEnergy: "all", language: "any" },
@@ -45,6 +47,7 @@ export class Service {
     this.sessionSource = null;
     this.library = { liked: new Set(), disliked: new Set(), loadedAt: 0 };
     this.uncensor = new Uncensor(this.api, this.store);
+    this.media = new MediaRegistry({ fetchImpl, log });
     this.wave = new WaveManager({
       api: this.api,
       history: this.history,
@@ -148,7 +151,8 @@ export class Service {
   }
 
   decorate(tracks) {
-    return tracks.map((t) => ({ ...t, liked: this.library.liked.has(t.id), disliked: this.library.disliked.has(t.id) }));
+    const ov = this.store.get("overrides") || {};
+    return tracks.map((t) => ({ ...t, liked: this.library.liked.has(t.id), disliked: this.library.disliked.has(t.id), ...(ov[t.id] ? { localFile: ov[t.id].name } : {}) }));
   }
 
   // ---------- home ----------
@@ -315,9 +319,61 @@ export class Service {
   async resolvePlay(track) {
     this.requireAuth();
     const prefs = this.prefs;
+    // the user's own file for this track (e.g. an uncensored copy) wins over anything Yandex has
+    const local = this.localFile(track.id);
+    if (local) {
+      const url = this.media.register({ kind: "file", path: local.path, mime: local.mime });
+      return { track: this.decorate([track])[0], stream: { url, codec: "local", bitrate: null, quality: "local", gain: false } };
+    }
     const actual = await this.uncensor.resolve(track, { enabled: prefs.uncensor });
-    const stream = await this.api.fileInfo(actual.id, prefs.quality);
+    const stream = await this.streamFor(actual.id, prefs.quality);
     return { track: this.decorate([actual])[0], stream };
+  }
+
+  /** Stream for the chosen quality. Lossless goes through the local decrypting proxy; the key never reaches the UI. */
+  async streamFor(trackId, quality) {
+    if (quality === "lossless") {
+      const enc = await this.api.fileInfo(trackId, "lossless", CODECS, "encraw").catch((e) => (this.log("lossless info failed", e.message), null));
+      if (enc?.key && /^flac/.test(enc.codec || "")) {
+        const refresh = async () => {
+          const f = await this.api.fileInfo(trackId, "lossless", CODECS, "encraw");
+          return { url: f.url, key: f.key };
+        };
+        const url = this.media.register({ kind: "enc", url: enc.url, key: enc.key, mime: enc.codec === "flac" ? "audio/flac" : "audio/mp4", refresh });
+        return { url, codec: enc.codec, bitrate: enc.bitrate, quality: "lossless", gain: enc.gain };
+      }
+      // no lossless master for this track: the best open stream
+    }
+    const { key, ...open } = await this.api.fileInfo(trackId, quality === "lq" ? "lq" : "nq");
+    return open;
+  }
+
+  // ---------- local replacement files ----------
+  localFile(trackId) {
+    const o = (this.store.get("overrides") || {})[trackId];
+    if (!o) return null;
+    const mime = audioMime(o.path);
+    return mime && fs.existsSync(o.path) ? { ...o, mime } : null;
+  }
+
+  listOverrides() {
+    return this.store.get("overrides") || {};
+  }
+
+  setOverride(trackId, file) {
+    if (!/^\d+$/.test(String(trackId))) throw new ApiError("Неверный трек", 400);
+    if (typeof file !== "string" || !audioMime(file)) throw new ApiError("Нужен аудиофайл: mp3, flac, m4a, aac, ogg, opus или wav", 400);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) throw new ApiError("Файл не найден", 404);
+    const all = { ...(this.store.get("overrides") || {}), [trackId]: { path: file, name: path.basename(file), at: Date.now() } };
+    this.store.set("overrides", all);
+    return all[trackId];
+  }
+
+  removeOverride(trackId) {
+    const all = { ...(this.store.get("overrides") || {}) };
+    delete all[trackId];
+    this.store.set("overrides", all);
+    return { ok: true };
   }
 
   async lyrics(track) {

@@ -6,6 +6,7 @@ import { api, dropCache } from "../lib/api.js";
 import { go } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
 import { nowPlayingOpen } from "../lib/ui.js";
+import { canReplace, overrides, replaceWithFile, restoreYandexAudio } from "../lib/overrides.js";
 import * as player from "../player/engine.js";
 
 /** { x, y, track, playlist?: { kind, index, onRemoved } } */
@@ -222,6 +223,16 @@ function MenuBody({ m }) {
       >
         <Icon name="link" size={16} /> Скопировать ссылку
       </button>
+      {canReplace &&
+        (overrides.value[t.id] ? (
+          <button class="menu-item" role="menuitem" onClick={act(() => restoreYandexAudio(t))} title={overrides.value[t.id].name}>
+            <Icon name="album" size={16} /> Вернуть звук Яндекса
+          </button>
+        ) : (
+          <button class="menu-item" role="menuitem" onClick={act(() => replaceWithFile(t))} title="Например, свою копию без цензуры, если Яндекс отредактировал сам файл">
+            <Icon name="album" size={16} /> Заменить звук своим файлом…
+          </button>
+        ))}
     </div>
   );
 }

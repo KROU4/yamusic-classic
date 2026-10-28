@@ -520,6 +520,12 @@ export function cycleRepeat() {
   LS.set("ymc-repeat", repeat.value);
 }
 
+/** Drops cached stream links (quality changed, local replacement set or removed); the next start resolves again. */
+export function forgetResolved(trackId) {
+  if (trackId == null) resolved.clear();
+  else resolved.delete(trackId);
+}
+
 export function setAudioConfig(patch) {
   audioConfig.value = { ...audioConfig.value, ...patch };
   LS.set("ymc-crossfade", audioConfig.value.crossfade);

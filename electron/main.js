@@ -238,6 +238,17 @@ ipcMain.on("ymc:mini", (e, on) => {
   setMini(!!on);
 });
 
+// native file picker for "play my own file instead of this track"
+ipcMain.handle("ymc:pick-audio", async (e) => {
+  if (e.sender !== win?.webContents) return null;
+  const r = await dialog.showOpenDialog(win, {
+    title: "Свой файл для трека",
+    properties: ["openFile"],
+    filters: [{ name: "Аудио", extensions: ["mp3", "flac", "m4a", "mp4", "aac", "ogg", "opus", "wav"] }],
+  });
+  return r.canceled ? null : r.filePaths[0] || null;
+});
+
 function createWindow(url, key) {
   const b = loadBounds();
   win = new BrowserWindow({

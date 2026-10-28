@@ -71,6 +71,9 @@ export function buildRoutes(svc) {
     ["POST", /^\/api\/my\/playlists\/(\d+)\/remove$/, (q, m, b) => svc.removeFromPlaylist(m[1], b.track, b.index)],
     ["POST", /^\/api\/my\/playlists\/(\d+)\/rename$/, (q, m, b) => svc.renamePlaylist(m[1], b.title)],
     ["POST", /^\/api\/my\/playlists\/(\d+)\/delete$/, (q, m) => svc.deletePlaylist(m[1])],
+    ["GET", /^\/api\/overrides$/, () => svc.listOverrides()],
+    ["POST", /^\/api\/overrides$/, (q, m, b) => svc.setOverride(String(b.trackId), b.path)],
+    ["POST", /^\/api\/overrides\/remove$/, (q, m, b) => svc.removeOverride(String(b.trackId))],
   ];
 }
 
@@ -86,6 +89,12 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
     if (!allowedHosts.has(req.headers.host)) return send(421, "Misdirected Request");
 
     const url = new URL(req.url, "http://local");
+    // media links carry their own random id as the capability (<audio> can't send the key header)
+    const media = /^\/media\/([0-9a-f]{32})$/.exec(url.pathname);
+    if (media && svc.media) {
+      if (await svc.media.handle(req, res, media[1])) return;
+      return send(404, "not found");
+    }
     if (url.pathname.startsWith("/api/")) {
       // compare lengths in bytes: a non-ASCII header gives a different buffer size, and timingSafeEqual would throw
       const given = Buffer.from(String(req.headers["x-ymc-key"] || ""));

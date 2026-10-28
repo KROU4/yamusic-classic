@@ -187,10 +187,14 @@ export class YandexMusic {
   }
 
   // ---- playback ----
-  /** Direct audio link. transport=raw returns an unencrypted file that the browser plays itself. */
-  async fileInfo(trackId, quality = "lossless", codecs = CODECS) {
+  /**
+   * Audio link. quality: "lq" (HE-AAC 64), "nq" (AAC 192), "lossless" (FLAC where available).
+   * transport "raw" gives an open file (never lossless); "encraw" gives the same files AES-128-CTR-encrypted,
+   * including FLAC, with the key in the answer (see media.js).
+   */
+  async fileInfo(trackId, quality = "nq", codecs = CODECS, transport = "raw") {
     const ts = nowSeconds();
-    const transports = ["raw"];
+    const transports = [transport];
     const sign = fileInfoSign({ ts, trackId, quality, codecs, transports });
     const r = await this.get("/get-file-info", {
       query: { ts, trackId, quality, codecs: codecs.join(","), transports: transports.join(","), sign },
@@ -202,7 +206,9 @@ export class YandexMusic {
       codec: info.codec,
       bitrate: info.bitrate,
       quality: info.quality,
+      transport: info.transport || transport,
       gain: info.gain || false,
+      key: info.key || null,
     };
   }
 

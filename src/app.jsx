@@ -19,6 +19,7 @@ import { SettingsPage } from "./pages/Settings.jsx";
 import { StatsPage } from "./pages/Stats.jsx";
 import { Loading } from "./components/States.jsx";
 import * as player from "./player/engine.js";
+import { loadOverrides } from "./lib/overrides.js";
 
 function Page({ me, reconnect }) {
   const { name, params } = route.value;
@@ -75,6 +76,7 @@ export function App() {
   useEffect(() => {
     load();
     player.restoreQueue();
+    loadOverrides();
     // audio settings live on the backend: pull in crossfade and loudness normalization
     api
       .get("/prefs")
