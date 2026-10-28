@@ -59,6 +59,13 @@ export function unpin(p) {
   save(pins.value.filter((x) => pinKey(x) !== key));
 }
 
+/** Refresh a pin's stored snapshot (e.g. after renaming a playlist); no-op if it isn't pinned. */
+export function updatePin(p, patch) {
+  const key = pinKey(p);
+  if (!pins.value.some((x) => pinKey(x) === key)) return;
+  save(pins.value.map((x) => (pinKey(x) === key ? { ...x, ...patch } : x)));
+}
+
 /** Reordering by drag in the sidebar. */
 export function movePin(from, to) {
   const list = [...pins.value];

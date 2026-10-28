@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld("ymcDesktop", {
   setMini: (on) => ipcRenderer.send("ymc:mini", !!on),
   /** UI zoom 0.75–1.5. */
   setZoom: (f) => webFrame.setZoomFactor(Math.max(0.75, Math.min(1.5, Number(f) || 1))),
+  /** Window visibility (minimized / in the tray) — to pause purely visual work. */
+  onVisibility: (cb) => ipcRenderer.on("ymc:visibility", (_e, visible) => cb(!!visible)),
 });

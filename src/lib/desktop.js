@@ -21,7 +21,8 @@ export const zoom = signal(readZoom());
 export function setZoom(v) {
   const z = ZOOM_STEPS.includes(v) ? v : 1;
   zoom.value = z;
-  bridge?.setZoom?.(z);
+  // the mini player has a fixed window size and always stays at 100%
+  if (!mini.peek()) bridge?.setZoom?.(z);
   try {
     localStorage.setItem("ymc-zoom", String(z));
   } catch {
@@ -34,8 +35,14 @@ export function stepZoom(dir) {
 }
 if (zoom.value !== 1) bridge?.setZoom?.(zoom.value);
 
+/** Whether the window is on screen (not minimized, not in the tray). Always true in the browser. */
+export const windowVisible = signal(true);
+bridge?.onVisibility?.((v) => (windowVisible.value = v));
+
 export function setMini(value) {
   mini.value = value;
+  // zoom would crop the fixed-size mini player; the chosen zoom comes back with the full window
+  bridge?.setZoom?.(value ? 1 : zoom.peek());
   bridge?.setMini(value);
 }
 

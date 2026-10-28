@@ -45,6 +45,9 @@ let filters = [];
 let analyser = null;
 let freq = null;
 const sources = new WeakMap(); // element -> { src, gain }
+const live = new Set(); // elements currently routed through the graph
+let idleTimer = 0;
+const anyPlaying = () => [...live].some((el) => !el.paused);
 
 function build() {
   if (ctx || !webAudioSupported) return ctx;
@@ -66,6 +69,11 @@ function build() {
     for (const f of filters) node = node.connect(f);
     node.connect(ctx.destination);
     applyEq();
+    // device change, Bluetooth headset switch or a system interruption can suspend the context mid-track:
+    // the element keeps running but goes silent, so wake it up right away while something is playing
+    ctx.onstatechange = () => {
+      if (ctx.state !== "running" && ctx.state !== "closed" && anyPlaying()) ctx.resume().catch(() => {});
+    };
     graphReady.value = true;
   } catch {
     ctx = null;
@@ -87,6 +95,7 @@ export function prepare(el) {
     src.connect(gain).connect(preamp);
     src.connect(analyser);
     sources.set(el, { src, gain });
+    live.add(el);
   } catch {
     // the element is already connected to another context — it plays bypassing the graph
   }
@@ -103,6 +112,7 @@ export function release(el) {
     // already disconnected
   }
   sources.delete(el);
+  live.delete(el);
 }
 
 /** Element volume 0..1: through the graph if the element is connected to it, otherwise via the plain volume property. */
@@ -124,7 +134,17 @@ export function getVolume(el) {
 
 /** The context may have fallen asleep (system, long pause) — wake it on every playback start. */
 export function resume() {
-  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  clearTimeout(idleTimer);
+  if (ctx && ctx.state !== "running" && ctx.state !== "closed") ctx.resume().catch(() => {});
+}
+
+/** Playback paused: after a while with nothing playing, suspend the context so the audio thread idles. */
+export function idle() {
+  clearTimeout(idleTimer);
+  if (!ctx) return;
+  idleTimer = setTimeout(() => {
+    if (ctx.state === "running" && !anyPlaying()) ctx.suspend().catch(() => {});
+  }, 30000);
 }
 
 function applyEq() {

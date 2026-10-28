@@ -1,16 +1,17 @@
 // My Wave in the spirit of Yandex Music 2023–2024: a large block with generative animation,
 // a centered «▶ Моя волна» and settings by activity, character, mood and language. No wheel.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
 import { VibeCanvas, paletteFor } from "./VibeCanvas.jsx";
 import { api } from "../lib/api.js";
 import { artistNames } from "../lib/format.js";
 import { isPinned, togglePin } from "../lib/pins.js";
 import { toast } from "../lib/toast.js";
+import { nowPlayingOpen } from "../lib/ui.js";
+import { waveSettings, setWaveSettings, DEFAULT_WAVE_SETTINGS as DEFAULT_SETTINGS } from "../player/waveState.js";
 import * as p from "../player/engine.js";
 
-export const DEFAULT_SETTINGS = { activity: "any", diversity: "default", moodEnergy: "all", language: "any" };
+export { DEFAULT_SETTINGS };
 
 export const OPTIONS = {
   activity: [
@@ -45,12 +46,13 @@ export const OPTIONS = {
 };
 const LABELS = { activity: "Занятие", diversity: "Характер", moodEnergy: "Настроение", language: "Язык" };
 
-export const waveSettings = signal(null);
+export { waveSettings };
 
 export async function loadWaveSettings() {
   if (waveSettings.value) return waveSettings.value;
   const r = await api.get("/wave");
-  waveSettings.value = { ...DEFAULT_SETTINGS, ...(r.current || {}) };
+  // a wave started meanwhile already filled the settings with what the server actually used
+  if (!waveSettings.value) setWaveSettings(r.current);
   return waveSettings.value;
 }
 
@@ -70,8 +72,15 @@ function Settings({ onClose }) {
   const cur = waveSettings.value || DEFAULT_SETTINGS;
   const box = useRef(null);
   const timer = useRef(0);
+  const pending = useRef(null);
   const ctx = p.context.value;
   const waveOn = ctx?.type === "wave" && ctx.stationId === "user:onyourwave";
+  const flush = () => {
+    clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = null;
+    if (next) p.playWave({ settings: next });
+  };
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
     const onDown = (e) => !box.current?.contains(e.target) && !e.target.closest?.(".vibe-tune") && onClose();
@@ -80,15 +89,22 @@ function Settings({ onClose }) {
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDown, true);
-      clearTimeout(timer.current);
+      // closing the panel right after a click must not lose the restart
+      flush();
     };
   }, []);
-  // as in the original: a choice rebuilds the playing wave right away (with a delay in case of several clicks in a row)
+  // as in the original: a choice rebuilds the playing wave right away (with a delay in case of several clicks in a row).
+  // A paused wave is not started by a chip click: the choice is kept and «Слушать» starts it
   const set = (next) => {
-    waveSettings.value = next;
+    setWaveSettings(next);
     clearTimeout(timer.current);
-    if (waveOn) timer.current = setTimeout(() => p.playWave({ settings: next }), 450);
+    pending.current = null;
+    if (waveOn && p.playing.peek()) {
+      pending.current = next;
+      timer.current = setTimeout(flush, 450);
+    }
   };
+  const playingWave = waveOn && p.playing.value;
   const pinned = isPinned(wavePin(cur));
   return (
     <div class="vibe-settings" ref={box} role="dialog" aria-label="Настроить волну">
@@ -116,10 +132,11 @@ function Settings({ onClose }) {
         >
           <Icon name="pin" size={16} /> {pinned ? "Закреплено" : "Закрепить"}
         </button>
-        {!waveOn && (
+        {!playingWave && (
           <button
             class="btn primary"
             onClick={() => {
+              pending.current = null;
               onClose();
               p.playWave({ settings: cur });
             }}
@@ -156,7 +173,8 @@ export function WaveHero() {
   const start = () => (isWave ? p.toggle() : p.playWave({ settings: s || undefined }));
   return (
     <section class={`vibe ${active ? "is-active" : ""} ${open ? "is-tuning" : ""}`}>
-      <VibeCanvas colors={paletteFor(s)} active={isWave} pulseAt={pulseAt} />
+      {/* under the full-screen Now Playing the hero is hidden — one WebGL loop at a time */}
+      <VibeCanvas colors={paletteFor(s)} active={isWave} pulseAt={pulseAt} paused={nowPlayingOpen.value} />
       <div class="vibe-center">
         <button class="vibe-title" onClick={start} aria-label={active ? "Пауза" : "Слушать Мою волну"}>
           <span class="vibe-title-icon">

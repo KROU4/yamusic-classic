@@ -5,6 +5,7 @@ import { api } from "../lib/api.js";
 import { artistNames } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
 import * as graph from "./audiograph.js";
+import { setWaveSettings } from "./waveState.js";
 
 const LS = {
   get(key, fallback) {
@@ -44,7 +45,9 @@ export const audioConfig = signal({ crossfade: LS.get("ymc-crossfade", 0), norma
 // Sleep timer: null | { mode: "time", at } | { mode: "track" }
 export const sleepTimer = signal(null);
 /** Playback speed (podcasts, audiobooks); pitch is preserved. */
-export const rate = signal(LS.get("ymc-rate", 1));
+const clampRate = (v) => (Number.isFinite(+v) ? Math.max(0.5, Math.min(2, Math.round(+v * 100) / 100)) : 1);
+// a corrupted stored value must not break element creation at import time
+export const rate = signal(clampRate(LS.get("ymc-rate", 1)));
 // Seek counter: the shell (tray, taskbar) resends state after a seek
 export const seekGen = signal(0);
 
@@ -352,9 +355,13 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
     queueGen++;
     skipStreak = 0;
     waveFetching = null;
+    // the server reports the settings it really used (saved ones when none were passed) — the hero,
+    // pins and Now Playing follow them instead of a stale local copy
+    const used = r.wave?.settings || settings || null;
     batch(() => {
       queue.value = r.tracks;
-      context.value = { type: "wave", title, stationId, settings: settings || null, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
+      context.value = { type: "wave", title, stationId, settings: used, from: `desktop_win-radio-${stationId.replace(":", "_")}-default` };
+      if (stationId === "user:onyourwave" && used) setWaveSettings(used);
     });
     return load(0);
   } catch (e) {
@@ -509,7 +516,7 @@ export function setAudioConfig(patch) {
 }
 
 export function setRate(v) {
-  const r = Math.max(0.5, Math.min(2, Math.round(v * 100) / 100));
+  const r = clampRate(v);
   rate.value = r;
   for (const el of [audio, fade?.old]) if (el) el.defaultPlaybackRate = el.playbackRate = r;
   LS.set("ymc-rate", r);
@@ -670,7 +677,10 @@ function attachListeners(el) {
     loading.value = false;
     skipStreak = 0; // reset only when sound actually started, not when the link was obtained
   });
-  on("pause", () => (playing.value = false));
+  on("pause", () => {
+    playing.value = false;
+    graph.idle();
+  });
   on("waiting", () => (loading.value = true));
   on("canplay", () => (loading.value = false));
   on("durationchange", () => {

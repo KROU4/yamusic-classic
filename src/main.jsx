@@ -18,20 +18,28 @@ window.addEventListener("keydown", (e) => {
 });
 
 // Back/forward: Alt+arrows and the mouse side buttons, like in a browser
+// (only in the app: a browser already does this itself, and handling it twice would jump two steps)
 window.addEventListener("keydown", (e) => {
-  if (!e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!isDesktop || !e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.code === "ArrowLeft") history.back();
   if (e.code === "ArrowRight") history.forward();
 });
 window.addEventListener("mouseup", (e) => {
+  if (!isDesktop) return;
   if (e.button === 3) history.back();
   if (e.button === 4) history.forward();
 });
 
 // Player hotkeys (don't fire while typing)
 window.addEventListener("keydown", (e) => {
-  const tag = document.activeElement?.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = document.activeElement;
+  // form controls keep their own keys (arrows in the EQ preset list, space on a select)
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(el?.tagName) || el?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+  // "?" is Shift+7 in the Russian layout, so match the typed character as well as the physical key
+  if (e.key === "?" || (e.code === "Slash" && e.shiftKey)) {
+    shortcutsOpen.value = !shortcutsOpen.value;
+    return;
+  }
   const pos = player.position.value;
   switch (e.code) {
     case "Space":
@@ -56,9 +64,6 @@ window.addEventListener("keydown", (e) => {
       break;
     case "KeyL":
       if (player.current.value) player.like(player.current.value);
-      break;
-    case "Slash":
-      if (e.shiftKey) shortcutsOpen.value = !shortcutsOpen.value;
       break;
   }
 });

@@ -286,6 +286,13 @@ function createWindow(url, key) {
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
   win.on("show", updateThumbar);
+  // backgroundThrottling is off, so the page never sees document.hidden: tell it explicitly
+  // when the window is out of sight (minimized or in the tray) to stop purely visual work
+  const sendVisibility = () => {
+    if (!win || win.isDestroyed()) return;
+    win.webContents.send("ymc:visibility", win.isVisible() && !win.isMinimized());
+  };
+  for (const ev of ["show", "hide", "minimize", "restore"]) win.on(ev, sendVisibility);
   // Windows shutdown/logoff: before-quit doesn't arrive, and "minimize to tray" must not block closing
   win.on("session-end", () => {
     quitting = true;
@@ -320,7 +327,7 @@ function createWindow(url, key) {
   win.loadURL(`${url}#k=${key}`);
 }
 
-// Smoke mode for visual checks: YMC_SHOTS=path to JSON [{ hash?, js?, wait?, file, mini? }].
+// Smoke mode for visual checks: YMC_SHOTS=path to JSON [{ window?: "minimize"|"restore", hash?, js?, wait?, file? }].
 // Steps run in order in a real window, a window screenshot after each one with file.
 async function runShots(specFile) {
   const steps = JSON.parse(fs.readFileSync(specFile, "utf8"));
@@ -328,7 +335,9 @@ async function runShots(specFile) {
   await sleep(3000);
   for (const step of steps) {
     try {
-      // order: navigate -> wait for page load -> check; without navigation: action -> wait for the result
+      // order: window action -> navigate -> wait for page load -> check; without navigation: action -> wait for the result
+      if (step.window === "minimize") win.minimize();
+      if (step.window === "restore") win.restore();
       if (step.hash) {
         await win.webContents.executeJavaScript(`location.hash = ${JSON.stringify(step.hash)}`);
         await sleep(step.wait ?? 1500);
@@ -358,7 +367,10 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
   // Yandex's audio CDN allows CORS only for music.yandex.ru. Without the header Web Audio (equalizer,
   // wave animation reacting to music) gets silence, so we add it to audio host responses.
-  session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://*.yandex.net/*"] }, (d, cb) => {
+  // All media responses, not just *.yandex.net: the renderer sets crossOrigin on every <audio>, and a stream
+  // served from an unexpected host or redirect without the header would not play at all. This window only
+  // ever loads media from Yandex stream URLs, so widening the filter exposes nothing else.
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ["http://*/*", "https://*/*"] }, (d, cb) => {
     if (d.resourceType !== "media") return cb({});
     const headers = { ...d.responseHeaders };
     for (const k of Object.keys(headers)) if (/^access-control-allow-(origin|credentials)$/i.test(k)) delete headers[k];

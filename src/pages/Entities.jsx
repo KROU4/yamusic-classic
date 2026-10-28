@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon.jsx";
 import { href, go } from "../lib/router.js";
 import { plural, totalDuration, ALBUM_TYPES } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
-import { unpin } from "../lib/pins.js";
+import { unpin, updatePin } from "../lib/pins.js";
 import { PinButton } from "../components/PinButton.jsx";
 import * as player from "../player/engine.js";
 
@@ -157,6 +157,7 @@ export function PlaylistPage({ uid, kind }) {
     try {
       await api.post(`/my/playlists/${kind}/rename`, { title });
       dropCache("/collection");
+      updatePin({ type: "playlist", uid: String(uid), kind: String(kind) }, { title });
       refresh();
     } catch (e) {
       toast(e.message);
