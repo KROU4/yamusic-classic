@@ -4,6 +4,7 @@ import { signal, computed, batch } from "@preact/signals";
 import { api } from "../lib/api.js";
 import { artistNames } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
+import * as graph from "./audiograph.js";
 
 const LS = {
   get(key, fallback) {
@@ -73,15 +74,19 @@ const playable = (t) => t && (t.available || t.substituted?.available);
 function createElement() {
   const el = new Audio();
   el.preload = "auto";
+  graph.prepare(el); // CORS-режим и подключение к эквалайзеру — до первого src
   attachListeners(el);
   return el;
 }
 let audio = createElement();
 
-/** Множитель выравнивания: громкие треки приглушаются до общего уровня (усиливать тихие <audio> не умеет). */
-export function loudnessFactor(track, normalize = audioConfig.value.normalize) {
+/**
+ * Множитель выравнивания: громкие треки приглушаются до общего уровня. Тихие поднимаются (до +4 дБ)
+ * только через звуковой граф — у самого <audio> громкость не больше 1; итог всё равно ограничен единицей.
+ */
+export function loudnessFactor(track, normalize = audioConfig.value.normalize, boost = graph.graphReady.value) {
   if (!normalize || typeof track?.loudness !== "number") return 1;
-  const gainDb = Math.min(0, TARGET_LUFS - track.loudness);
+  const gainDb = Math.min(boost ? 4 : 0, TARGET_LUFS - track.loudness);
   return Math.max(0.1, 10 ** (gainDb / 20));
 }
 
@@ -92,7 +97,7 @@ function targetVolume(track) {
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
 function applyVolume() {
-  audio.volume = clamp01(targetVolume(current.value) * fadeMul * sleepMul);
+  graph.setVolume(audio, clamp01(targetVolume(current.value) * fadeMul * sleepMul));
 }
 
 const isFresh = (id) => {
@@ -145,6 +150,7 @@ function cancelFade() {
   fade.old.pause();
   fade.old.removeAttribute("src");
   fade.old.load();
+  graph.release(fade.old);
   fade = null;
   fadeMul = 1;
   applyVolume();
@@ -276,7 +282,7 @@ function startCrossfade() {
     const k = Math.min(1, (performance.now() - t0) / (seconds * 1000));
     // равная мощность: косинус/синус, без провала громкости посередине.
     // Громкость старого трека считается заново на каждом шаге — mute и ползунок действуют и на него
-    old.volume = clamp01(targetVolume(oldTrack) * sleepMul * Math.cos((k * Math.PI) / 2));
+    graph.setVolume(old, clamp01(targetVolume(oldTrack) * sleepMul * Math.cos((k * Math.PI) / 2)));
     fadeMul = Math.sin((k * Math.PI) / 2);
     applyVolume();
     if (k >= 1) {
@@ -284,6 +290,7 @@ function startCrossfade() {
       old.pause();
       old.removeAttribute("src");
       old.load();
+      graph.release(old);
       fade = null;
       fadeMul = 1;
       applyVolume();
@@ -646,6 +653,7 @@ export async function dislike(track) {
 // ---------- события <audio> (только для текущего элемента) ----------
 function attachListeners(el) {
   const on = (type, fn) => el.addEventListener(type, (e) => el === audio && fn(e));
+  on("play", () => graph.resume());
   on("playing", () => {
     playing.value = true;
     loading.value = false;
@@ -787,4 +795,4 @@ export function restoreQueue() {
 export const currentTime = () => audio.currentTime;
 
 // диагностика для smoke-тестов: идёт ли кроссфейд и с какой громкостью звучат оба трека
-window.__ymcDebug = () => ({ fading: !!fade, oldVolume: fade?.old.volume ?? null, volume: audio.volume, fadeMul });
+window.__ymcDebug = () => ({ graph: graph.graphReady.value, levels: graph.levels(), fading: !!fade, oldVolume: fade ? graph.getVolume(fade.old) : null, volume: graph.getVolume(audio), fadeMul });

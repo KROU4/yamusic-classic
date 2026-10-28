@@ -165,6 +165,9 @@ describe("нормализация", () => {
   it("сиды настроек волны", () => {
     expect(settingsSeeds({ diversity: "discover", moodEnergy: "all", language: "russian" })).toEqual(["settingDiversity:discover", "settingLanguage:russian"]);
     expect(settingsSeeds({})).toEqual([]);
+    expect(settingsSeeds({ activity: "workout", moodEnergy: "calm" })).toEqual(["activity:workout", "settingMoodEnergy:calm"]);
+    // неизвестные значения не превращаются в сиды
+    expect(settingsSeeds({ activity: "x:y", diversity: "evil" })).toEqual([]);
   });
 });
 

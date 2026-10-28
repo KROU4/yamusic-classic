@@ -8,13 +8,17 @@ export const WAVE_SETTINGS = {
   diversity: ["default", "favorite", "discover", "popular"],
   moodEnergy: ["all", "active", "fun", "calm", "sad"],
   language: ["any", "russian", "not-russian", "without-words"],
+  // «Занятие»: сид станции activity:* рядом с user:onyourwave — волна остаётся личной, но под занятие
+  activity: ["any", "wake-up", "workout", "road-trip", "work-background", "study-background", "party", "fall-asleep"],
 };
 
-export function settingsSeeds({ diversity = "default", moodEnergy = "all", language = "any" } = {}) {
+export function settingsSeeds({ diversity = "default", moodEnergy = "all", language = "any", activity = "any" } = {}) {
+  const ok = (key, v) => WAVE_SETTINGS[key].includes(v);
   const seeds = [];
-  if (diversity !== "default") seeds.push(`settingDiversity:${diversity}`);
-  if (moodEnergy !== "all") seeds.push(`settingMoodEnergy:${moodEnergy}`);
-  if (language !== "any") seeds.push(`settingLanguage:${language}`);
+  if (activity !== "any" && ok("activity", activity)) seeds.push(`activity:${activity}`);
+  if (diversity !== "default" && ok("diversity", diversity)) seeds.push(`settingDiversity:${diversity}`);
+  if (moodEnergy !== "all" && ok("moodEnergy", moodEnergy)) seeds.push(`settingMoodEnergy:${moodEnergy}`);
+  if (language !== "any" && ok("language", language)) seeds.push(`settingLanguage:${language}`);
   return seeds;
 }
 

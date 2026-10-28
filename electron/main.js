@@ -356,6 +356,15 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   // музыкальному клиенту не нужны ни камера, ни микрофон, ни уведомления сайтов
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  // Аудио-CDN Яндекса разрешает CORS только для music.yandex.ru. Без заголовка Web Audio (эквалайзер,
+  // реакция анимации волны на музыку) получает тишину, поэтому добавляем его к ответам аудиохостов.
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://*.yandex.net/*"] }, (d, cb) => {
+    if (d.resourceType !== "media") return cb({});
+    const headers = { ...d.responseHeaders };
+    for (const k of Object.keys(headers)) if (/^access-control-allow-(origin|credentials)$/i.test(k)) delete headers[k];
+    headers["Access-Control-Allow-Origin"] = ["*"];
+    cb({ responseHeaders: headers });
+  });
   try {
     backend = await startBackend();
     log(`бэкенд готов через ${Date.now() - t0} мс`);
