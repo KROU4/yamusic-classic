@@ -13,3 +13,4 @@ session*.json
 
 # agent worktrees
 .claude/worktrees/
+release-build/
