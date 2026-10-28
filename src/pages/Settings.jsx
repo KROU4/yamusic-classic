@@ -196,7 +196,7 @@ export function SettingsPage({ me, onReconnect }) {
           <Toggle label="Запускать свёрнутым" hint="При автозапуске окно сразу уходит в трей" checked={prefs.startMinimized} onChange={(v) => save({ startMinimized: v })} />
           <Toggle
             label="Глобальные горячие клавиши"
-            hint="Работают, даже когда окно не в фокусе: Ctrl+Alt+Пробел — пауза, Ctrl+Alt+→/← — трек, Ctrl+Alt+↑/↓ — громкость, Ctrl+Alt+L — лайк"
+            hint="Работают, даже когда окно не в фокусе: Ctrl+Alt+P (или Ctrl+Alt+Пробел) — пауза, Ctrl+Alt+→/← — трек, Ctrl+Alt+↑/↓ — громкость, Ctrl+Alt+L — лайк"
             checked={prefs.globalHotkeys}
             onChange={(v) => save({ globalHotkeys: v })}
           />

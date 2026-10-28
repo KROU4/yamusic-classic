@@ -163,7 +163,9 @@ function setMini(on) {
 }
 
 // ---------- глобальные горячие клавиши ----------
+// Ctrl+Alt+Пробел часто занят (PowerToys, переключатели раскладок), поэтому основная пауза — Ctrl+Alt+P
 const HOTKEYS = {
+  "CommandOrControl+Alt+P": "toggle",
   "CommandOrControl+Alt+Space": "toggle",
   "CommandOrControl+Alt+Right": "next",
   "CommandOrControl+Alt+Left": "prev",
