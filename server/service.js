@@ -392,8 +392,15 @@ export class Service {
   }
 
   // ---------- статистика ----------
-  stats(days = 7, tzOffsetMin = 0) {
-    return computeStats(this.playlog.entries, { days, tzOffsetMin });
+  async stats(days = 7, tzOffsetMin = 0) {
+    const s = computeStats(this.playlog.entries, { days, tzOffsetMin });
+    // топ-треки догружаем целиком, чтобы их можно было сразу включить из статистики
+    if (this.account && s.topTracks.length) {
+      const full = await this.fullTracks(s.topTracks.map((t) => t.id)).catch(() => []);
+      const byId = new Map(this.decorate(full).map((t) => [t.id, t]));
+      s.topTracks = s.topTracks.map((t) => (byId.has(t.id) ? { ...byId.get(t.id), plays: t.plays, seconds: t.seconds } : null)).filter(Boolean);
+    }
+    return s;
   }
 
   // ---------- свои плейлисты ----------

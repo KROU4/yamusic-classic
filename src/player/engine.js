@@ -1,4 +1,5 @@
-// Движок воспроизведения: очередь, волна, отчёты о прослушивании, Media Session.
+// Движок воспроизведения: очередь, волна, кроссфейд, выравнивание громкости, таймер сна,
+// отчёты о прослушивании, Media Session.
 import { signal, computed, batch } from "@preact/signals";
 import { api } from "../lib/api.js";
 import { artistNames } from "../lib/format.js";
@@ -37,6 +38,10 @@ export const context = signal(null); // { type: "wave"|"list", title, from, stat
 export const stream = signal(null);
 export const current = computed(() => queue.value[index.value] || null);
 export const authError = signal(false);
+// Настройки звука с бэкенда: кроссфейд (секунды) и выравнивание громкости
+export const audioConfig = signal({ crossfade: LS.get("ymc-crossfade", 0), normalize: LS.get("ymc-normalize", false) });
+// Таймер сна: null | { mode: "time", at } | { mode: "track" }
+export const sleepTimer = signal(null);
 
 // Лайки, поставленные в этой сессии, поверх значений из ответов API
 export const likeOverrides = signal(new Map());
@@ -44,17 +49,40 @@ export const dislikeOverrides = signal(new Map());
 export const isLiked = (t) => (t ? (likeOverrides.value.has(t.id) ? likeOverrides.value.get(t.id) : !!t.liked) : false);
 export const isDisliked = (t) => (t ? (dislikeOverrides.value.has(t.id) ? dislikeOverrides.value.get(t.id) : !!t.disliked) : false);
 
-const audio = new Audio();
-audio.preload = "auto";
-audio.volume = volume.value;
-
 const resolved = new Map(); // trackId -> { track, stream, at }
 const RESOLVE_TTL = 4 * 60 * 1000;
+const TARGET_LUFS = -14; // ориентир громкости стримингов
 let session = null; // учёт текущего прослушивания
 let loadToken = 0;
 let waveFetching = null;
+let fade = null; // активный кроссфейд: { old, timer }
+let fadeMul = 1; // множитель громкости входящего трека во время кроссфейда
 
 const playable = (t) => t && (t.available || t.substituted?.available);
+
+// ---------- аудиоэлементы ----------
+function createElement() {
+  const el = new Audio();
+  el.preload = "auto";
+  attachListeners(el);
+  return el;
+}
+let audio = createElement();
+
+/** Множитель выравнивания: громкие треки приглушаются до общего уровня (усиливать тихие <audio> не умеет). */
+export function loudnessFactor(track, normalize = audioConfig.value.normalize) {
+  if (!normalize || typeof track?.loudness !== "number") return 1;
+  const gainDb = Math.min(0, TARGET_LUFS - track.loudness);
+  return Math.max(0.1, 10 ** (gainDb / 20));
+}
+
+function targetVolume(track) {
+  return muted.value ? 0 : volume.value * loudnessFactor(track);
+}
+
+function applyVolume() {
+  audio.volume = Math.max(0, Math.min(1, targetVolume(current.value) * fadeMul));
+}
 
 async function resolveTrack(track) {
   const hit = resolved.get(track.id);
@@ -86,6 +114,18 @@ function finishSession(reason, opts) {
 // Electron вызывает это перед закрытием окна и ждёт, пока прослушивание уйдёт в историю
 window.__ymcFinalize = () => finishSession("skip");
 
+/** Останавливает затухающий трек немедленно (пользователь вмешался во время кроссфейда). */
+function cancelFade() {
+  if (!fade) return;
+  clearInterval(fade.timer);
+  fade.old.pause();
+  fade.old.removeAttribute("src");
+  fade.old.load();
+  fade = null;
+  fadeMul = 1;
+  applyVolume();
+}
+
 // Подряд пропущенные недоступные треки: защита от бесконечного перебора (например, альбом закрыт в регионе + повтор всего)
 let skipStreak = 0;
 const MAX_SKIP_STREAK = 25;
@@ -105,7 +145,27 @@ function skipUnplayable(message) {
   setTimeout(() => next({ auto: true }), 0);
 }
 
+/** Трек мог быть заменён версией без цензуры — подставляем в очередь то, что играет на самом деле. */
+function applyResolved(i, r, original) {
+  if (r.track && r.track.id !== original.id) {
+    const copy = [...queue.value];
+    copy[i] = { ...r.track, liked: original.liked };
+    queue.value = copy;
+    if (r.track.uncensorReason) toast(`Играет оригинальная версия «${r.track.title}»`);
+  }
+}
+
+/** Общая часть «трек начал играть»: учёт, фидбэк волне, системная плашка, сохранение очереди. */
+function afterStart(i) {
+  startSession(queue.value[i]);
+  if (context.value?.type === "wave") api.post("/wave/feedback", { type: "trackStarted", track: queue.value[i] }).catch(() => {});
+  updateMediaSession();
+  persistQueue();
+  maybeExtendWave();
+}
+
 async function load(i, { autoplay = true } = {}) {
+  cancelFade();
   const list = queue.value;
   const track = list[i];
   if (!track) {
@@ -126,21 +186,12 @@ async function load(i, { autoplay = true } = {}) {
   try {
     const r = await resolveTrack(track);
     if (token !== loadToken) return;
-    // трек мог быть заменён на версию без цензуры — показываем, что играет на самом деле
-    if (r.track && r.track.id !== track.id) {
-      const copy = [...queue.value];
-      copy[i] = { ...r.track, liked: track.liked };
-      queue.value = copy;
-      if (r.track.uncensorReason) toast(`Играет оригинальная версия «${r.track.title}»`);
-    }
+    applyResolved(i, r, track);
     stream.value = r.stream;
     audio.src = r.stream.url;
-    startSession(queue.value[i]);
-    if (context.value?.type === "wave") api.post("/wave/feedback", { type: "trackStarted", track: queue.value[i] }).catch(() => {});
+    applyVolume();
+    afterStart(i);
     if (autoplay) await audio.play().catch(() => {});
-    updateMediaSession();
-    persistQueue();
-    maybeExtendWave();
   } catch (e) {
     if (token !== loadToken) return;
     loading.value = false;
@@ -151,6 +202,58 @@ async function load(i, { autoplay = true } = {}) {
     }
     skipUnplayable(`Не удалось включить «${track.title}»: ${e.message}`);
   }
+}
+
+/**
+ * Кроссфейд: следующий трек стартует в новом элементе и нарастает, текущий затухает.
+ * Логически переключаемся на следующий трек сразу, старый элемент просто доигрывает хвост.
+ */
+function startCrossfade() {
+  const seconds = audioConfig.value.crossfade;
+  const i = index.value + 1;
+  const nextTrack = queue.value[i];
+  const entry = nextTrack && resolved.get(nextTrack.id);
+  if (!entry || Date.now() - entry.at > RESOLVE_TTL) return false;
+
+  finishSession("ended");
+  loadToken++;
+  const old = audio;
+  const startOldVolume = old.volume;
+  const incoming = createElement();
+  incoming.src = entry.stream.url;
+
+  batch(() => {
+    index.value = i;
+    position.value = 0;
+    duration.value = (nextTrack.durationMs || 0) / 1000;
+  });
+  applyResolved(i, entry, nextTrack);
+  stream.value = entry.stream;
+  audio = incoming;
+  fadeMul = 0;
+  applyVolume();
+  afterStart(i);
+  incoming.play().catch(() => {});
+
+  const t0 = performance.now();
+  const timer = setInterval(() => {
+    const k = Math.min(1, (performance.now() - t0) / (seconds * 1000));
+    // равная мощность: косинус/синус, без провала громкости посередине
+    old.volume = Math.max(0, startOldVolume * Math.cos((k * Math.PI) / 2));
+    fadeMul = Math.sin((k * Math.PI) / 2);
+    applyVolume();
+    if (k >= 1) {
+      clearInterval(timer);
+      old.pause();
+      old.removeAttribute("src");
+      old.load();
+      fade = null;
+      fadeMul = 1;
+      applyVolume();
+    }
+  }, 50);
+  fade = { old, timer };
+  return true;
 }
 
 function order(tracks, startIndex) {
@@ -164,10 +267,10 @@ function order(tracks, startIndex) {
   return { list: first ? [first, ...rest] : rest, start: 0 };
 }
 
-/** Включить список треков. ctx: { title, from, link } */
 // Поколение очереди: ответы, запрошенные для прежней очереди, в новую не попадают
 let queueGen = 0;
 
+/** Включить список треков. ctx: { title, from, link } */
 export function playList(tracks, startIndex = 0, ctx = {}) {
   finishSession("skip");
   const { list, start } = order(tracks.filter(Boolean), startIndex);
@@ -233,6 +336,14 @@ function maybeExtendWave() {
 
 export async function next({ auto = false } = {}) {
   finishSession(auto ? "ended" : "skip");
+  // таймер «до конца трека»: доиграли — останавливаемся
+  if (auto && sleepTimer.value?.mode === "track") {
+    sleepTimer.value = null;
+    audio.pause();
+    playing.value = false;
+    toast("Таймер сна: воспроизведение остановлено");
+    return;
+  }
   const i = index.value;
   if (i < queue.value.length - 1) return load(i + 1);
   if (context.value?.type === "wave") {
@@ -246,6 +357,7 @@ export async function next({ auto = false } = {}) {
 
 export function prev() {
   if (audio.currentTime > 3 || index.value <= 0) {
+    cancelFade();
     audio.currentTime = 0;
     return;
   }
@@ -265,11 +377,15 @@ export function toggle() {
   if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
   if (!audio.src) return load(index.value);
   if (audio.paused) audio.play().catch(() => {});
-  else audio.pause();
+  else {
+    cancelFade();
+    audio.pause();
+  }
 }
 
 export function seek(sec) {
   if (!Number.isFinite(sec)) return;
+  cancelFade();
   if (session) session.lastPos = sec;
   audio.currentTime = Math.max(0, Math.min(sec, audio.duration || duration.value));
 }
@@ -277,14 +393,14 @@ export function seek(sec) {
 export function setVolume(v) {
   const val = Math.max(0, Math.min(1, v));
   volume.value = val;
-  audio.volume = val;
-  if (val > 0 && muted.value) toggleMute();
+  if (val > 0 && muted.value) muted.value = false;
+  applyVolume();
   LS.set("ymc-volume", val);
 }
 
 export function toggleMute() {
   muted.value = !muted.value;
-  audio.muted = muted.value;
+  applyVolume();
 }
 
 export function toggleShuffle() {
@@ -297,6 +413,54 @@ export function cycleRepeat() {
   LS.set("ymc-repeat", repeat.value);
 }
 
+export function setAudioConfig(patch) {
+  audioConfig.value = { ...audioConfig.value, ...patch };
+  LS.set("ymc-crossfade", audioConfig.value.crossfade);
+  LS.set("ymc-normalize", audioConfig.value.normalize);
+  applyVolume();
+}
+
+// ---------- таймер сна ----------
+let sleepInterval = null;
+
+/** minutes: число минут, "track" — до конца текущего трека, null — выключить. */
+export function setSleepTimer(minutes) {
+  clearInterval(sleepInterval);
+  sleepInterval = null;
+  if (minutes == null) {
+    sleepTimer.value = null;
+    return;
+  }
+  if (minutes === "track") {
+    sleepTimer.value = { mode: "track" };
+    toast("Остановлю после этого трека");
+    return;
+  }
+  sleepTimer.value = { mode: "time", at: Date.now() + minutes * 60000 };
+  toast(`Остановлю через ${minutes} мин`);
+  sleepInterval = setInterval(() => {
+    const st = sleepTimer.value;
+    if (!st || st.mode !== "time") return clearInterval(sleepInterval);
+    if (Date.now() < st.at) return;
+    clearInterval(sleepInterval);
+    sleepTimer.value = null;
+    // мягкое затухание за 8 секунд, а не резкий обрыв
+    const start = performance.now();
+    const t = setInterval(() => {
+      const k = Math.min(1, (performance.now() - start) / 8000);
+      fadeMul = 1 - k;
+      applyVolume();
+      if (k >= 1) {
+        clearInterval(t);
+        audio.pause();
+        fadeMul = 1;
+        applyVolume();
+        toast("Таймер сна: спокойной ночи");
+      }
+    }, 100);
+  }, 1000);
+}
+
 export function enqueueNext(tracks) {
   const list = [...queue.value];
   list.splice(index.value + 1, 0, ...tracks);
@@ -305,12 +469,35 @@ export function enqueueNext(tracks) {
   toast(tracks.length > 1 ? "Добавлено в очередь" : `«${tracks[0].title}» будет следующим`);
 }
 
+export function enqueueEnd(tracks) {
+  queue.value = [...queue.value, ...tracks];
+  if (index.value < 0) load(0);
+  toast(tracks.length > 1 ? `Добавлено в конец очереди: ${tracks.length}` : `«${tracks[0].title}» — в конце очереди`);
+}
+
 export function removeFromQueue(i) {
   if (i === index.value) return;
   const list = [...queue.value];
   list.splice(i, 1);
   queue.value = list;
   if (i < index.value) index.value -= 1;
+}
+
+/** Перестановка в очереди (drag-and-drop в панели «Очередь»). */
+export function moveInQueue(from, to) {
+  if (from === to || from < 0 || to < 0) return;
+  const list = [...queue.value];
+  const [item] = list.splice(from, 1);
+  list.splice(to, 0, item);
+  const cur = index.value;
+  let ni = cur;
+  if (from === cur) ni = to;
+  else if (from < cur && to >= cur) ni = cur - 1;
+  else if (from > cur && to <= cur) ni = cur + 1;
+  batch(() => {
+    queue.value = list;
+    index.value = ni;
+  });
 }
 
 export async function like(track, value = !isLiked(track)) {
@@ -351,73 +538,81 @@ export async function dislike(track) {
   }
 }
 
-// ---------- события <audio> ----------
-audio.addEventListener("playing", () => {
-  playing.value = true;
-  loading.value = false;
-  skipStreak = 0; // сбрасываем только когда звук реально пошёл, а не когда получена ссылка
-});
-audio.addEventListener("pause", () => (playing.value = false));
-audio.addEventListener("waiting", () => (loading.value = true));
-audio.addEventListener("canplay", () => (loading.value = false));
-audio.addEventListener("durationchange", () => {
-  if (Number.isFinite(audio.duration)) duration.value = audio.duration;
-});
-audio.addEventListener("progress", () => {
-  if (audio.buffered.length) buffered.value = audio.buffered.end(audio.buffered.length - 1);
-});
-audio.addEventListener("timeupdate", () => {
-  const t = audio.currentTime;
-  position.value = t;
-  if (session) {
-    const delta = t - session.lastPos;
-    if (delta > 0 && delta < 2) session.played += delta; // перемотка не считается прослушиванием
-    session.lastPos = t;
-  }
-  // за 25 секунд до конца заранее получаем ссылку на следующий трек
-  const nxt = queue.value[index.value + 1];
-  if (nxt && duration.value - t < 25 && !resolved.has(nxt.id) && playable(nxt)) resolveTrack(nxt).catch(() => {});
-  if ("mediaSession" in navigator && Number.isFinite(audio.duration)) {
-    try {
-      navigator.mediaSession.setPositionState({ duration: audio.duration, position: Math.min(t, audio.duration), playbackRate: 1 });
-    } catch {
-      // позиция может быть невалидной во время перемотки
+// ---------- события <audio> (только для текущего элемента) ----------
+function attachListeners(el) {
+  const on = (type, fn) => el.addEventListener(type, (e) => el === audio && fn(e));
+  on("playing", () => {
+    playing.value = true;
+    loading.value = false;
+    skipStreak = 0; // сбрасываем только когда звук реально пошёл, а не когда получена ссылка
+  });
+  on("pause", () => (playing.value = false));
+  on("waiting", () => (loading.value = true));
+  on("canplay", () => (loading.value = false));
+  on("durationchange", () => {
+    if (Number.isFinite(el.duration)) duration.value = el.duration;
+  });
+  on("progress", () => {
+    if (el.buffered.length) buffered.value = el.buffered.end(el.buffered.length - 1);
+  });
+  on("timeupdate", () => {
+    const t = el.currentTime;
+    position.value = t;
+    if (session) {
+      const delta = t - session.lastPos;
+      if (delta > 0 && delta < 2) session.played += delta; // перемотка не считается прослушиванием
+      session.lastPos = t;
     }
-  }
-});
-audio.addEventListener("ended", () => {
-  if (repeat.value === "one") {
-    finishSession("ended");
-    startSession(current.value);
-    audio.currentTime = 0;
-    audio.play().catch(() => {});
-    return;
-  }
-  next({ auto: true });
-});
-audio.addEventListener("error", async () => {
-  const track = current.value;
-  const s = session;
-  if (!track || !audio.src) return;
-  const token = loadToken;
-  // ссылка могла протухнуть — пробуем получить новую один раз за прослушивание
-  if (s && !s.retried) {
-    s.retried = true;
-    resolved.delete(track.id);
-    const pos = audio.currentTime;
-    try {
-      const r = await resolveTrack(track);
-      if (token !== loadToken) return;
-      audio.src = r.stream.url;
-      audio.currentTime = pos;
-      await audio.play();
+    const dur = duration.value;
+    const xf = audioConfig.value.crossfade;
+    // заранее получаем ссылку на следующий трек (с запасом на кроссфейд)
+    const nxt = queue.value[index.value + 1];
+    if (nxt && dur - t < 25 + xf && !resolved.has(nxt.id) && playable(nxt)) resolveTrack(nxt).catch(() => {});
+    if (context.value?.type === "wave" && dur - t < 30) maybeExtendWave();
+    // кроссфейд: не для повтора трека, не для таймера «до конца трека», не для коротких треков
+    if (xf > 0 && !fade && !el.paused && repeat.value !== "one" && sleepTimer.value?.mode !== "track" && dur > xf * 3 && dur - t <= xf) startCrossfade();
+    if ("mediaSession" in navigator && Number.isFinite(el.duration)) {
+      try {
+        navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(t, el.duration), playbackRate: 1 });
+      } catch {
+        // позиция может быть невалидной во время перемотки
+      }
+    }
+  });
+  on("ended", () => {
+    if (repeat.value === "one") {
+      finishSession("ended");
+      startSession(current.value);
+      el.currentTime = 0;
+      el.play().catch(() => {});
       return;
-    } catch {
-      if (token !== loadToken) return;
     }
-  }
-  skipUnplayable(`Ошибка воспроизведения «${track.title}», переключаю`);
-});
+    next({ auto: true });
+  });
+  on("error", async () => {
+    const track = current.value;
+    const s = session;
+    if (!track || !el.src) return;
+    const token = loadToken;
+    // ссылка могла протухнуть — пробуем получить новую один раз за прослушивание
+    if (s && !s.retried) {
+      s.retried = true;
+      resolved.delete(track.id);
+      const pos = el.currentTime;
+      try {
+        const r = await resolveTrack(track);
+        if (token !== loadToken) return;
+        el.src = r.stream.url;
+        el.currentTime = pos;
+        await el.play();
+        return;
+      } catch {
+        if (token !== loadToken) return;
+      }
+    }
+    skipUnplayable(`Ошибка воспроизведения «${track.title}», переключаю`);
+  });
+}
 
 // ---------- системные медиа-клавиши и SMTC Windows ----------
 function updateMediaSession() {
@@ -437,13 +632,23 @@ if ("mediaSession" in navigator) {
   const ms = navigator.mediaSession;
   // toggle, а не audio.play(): после перезапуска у <audio> ещё нет src
   ms.setActionHandler("play", () => toggle());
-  ms.setActionHandler("pause", () => audio.pause());
+  ms.setActionHandler("pause", () => toggle());
   ms.setActionHandler("nexttrack", () => next());
   ms.setActionHandler("previoustrack", () => prev());
   ms.setActionHandler("seekto", (e) => seek(e.seekTime));
   ms.setActionHandler("seekbackward", () => seek(audio.currentTime - 10));
   ms.setActionHandler("seekforward", () => seek(audio.currentTime + 10));
 }
+
+// управление из оболочки: глобальные хоткеи, кнопки на панели задач, трей
+window.__ymcControl = {
+  toggle,
+  next: () => next(),
+  prev,
+  like: () => current.value && like(current.value),
+  volumeUp: () => setVolume(volume.value + 0.05),
+  volumeDown: () => setVolume(volume.value - 0.05),
+};
 
 // закрытие окна посреди трека: прослушивание всё равно попадёт в историю и в отчёт Яндексу
 window.addEventListener("pagehide", () => finishSession("skip", { keepalive: true }));
@@ -469,4 +674,8 @@ export function restoreQueue() {
   });
 }
 
-export const audioElement = audio;
+/** Текущее время воспроизведения (для синхронизации текста в полноэкранном режиме). */
+export const currentTime = () => audio.currentTime;
+
+// диагностика для smoke-тестов: идёт ли кроссфейд и с какой громкостью звучат оба трека
+window.__ymcDebug = () => ({ fading: !!fade, oldVolume: fade?.old.volume ?? null, volume: audio.volume, fadeMul });

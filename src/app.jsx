@@ -2,13 +2,19 @@ import { useEffect, useState } from "preact/hooks";
 import { route } from "./lib/router.js";
 import { api } from "./lib/api.js";
 import { toasts } from "./lib/toast.js";
+import { me as meSignal } from "./lib/session.js";
+import { mini } from "./lib/desktop.js";
 import { Header } from "./components/Header.jsx";
 import { PlayerBar } from "./components/PlayerBar.jsx";
 import { SidePanel } from "./components/SidePanels.jsx";
+import { ContextMenu } from "./components/ContextMenu.jsx";
+import { NowPlaying } from "./components/NowPlaying.jsx";
+import { MiniPlayer } from "./components/MiniPlayer.jsx";
 import { Home } from "./pages/Home.jsx";
 import { AlbumPage, ArtistPage, PlaylistPage } from "./pages/Entities.jsx";
 import { SearchPage, CollectionPage, ChartPage, NewPage, RadioPage } from "./pages/Lists.jsx";
 import { SettingsPage } from "./pages/Settings.jsx";
+import { StatsPage } from "./pages/Stats.jsx";
 import { Loading } from "./components/States.jsx";
 import * as player from "./player/engine.js";
 
@@ -31,6 +37,8 @@ function Page({ me, reconnect }) {
       return <NewPage />;
     case "radio":
       return <RadioPage />;
+    case "stats":
+      return <StatsPage />;
     case "settings":
       return <SettingsPage me={me} onReconnect={reconnect} />;
     default:
@@ -54,13 +62,22 @@ function NoSession({ onRetry }) {
 }
 
 export function App() {
-  const [me, setMe] = useState(null);
+  const [me, setMeState] = useState(null);
+  const setMe = (v) => {
+    setMeState(v);
+    meSignal.value = v;
+  };
   const load = () => api.get("/me").then(setMe).catch(() => setMe({ authorized: false }));
   const reconnect = () => api.post("/reconnect").then(setMe).catch(() => setMe({ authorized: false }));
 
   useEffect(() => {
     load();
     player.restoreQueue();
+    // настройки звука живут на бэкенде — подтягиваем кроссфейд и выравнивание громкости
+    api
+      .get("/prefs")
+      .then((p) => player.setAudioConfig({ crossfade: p.crossfade || 0, normalize: !!p.normalize }))
+      .catch(() => {});
   }, []);
 
   if (!me) return <Loading />;
@@ -73,6 +90,13 @@ export function App() {
         }}
       />
     );
+  if (mini.value)
+    return (
+      <>
+        <MiniPlayer />
+        <ContextMenu />
+      </>
+    );
   return (
     <div class="layout">
       <Header me={me} />
@@ -83,6 +107,8 @@ export function App() {
         <SidePanel />
       </div>
       <PlayerBar />
+      <NowPlaying />
+      <ContextMenu />
       <div class="toasts" aria-live="polite">
         {toasts.value.map((t) => (
           <div key={t.id} class="toast">

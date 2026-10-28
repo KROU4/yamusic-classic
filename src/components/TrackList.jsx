@@ -2,6 +2,7 @@ import { Icon } from "./Icon.jsx";
 import { duration, artistNames } from "../lib/format.js";
 import { href } from "../lib/router.js";
 import * as player from "../player/engine.js";
+import { openTrackMenu } from "./ContextMenu.jsx";
 
 function Artists({ track }) {
   return (
@@ -26,7 +27,7 @@ export function ExplicitBadge() {
   );
 }
 
-function TrackRow({ track, i, list, ctx, showCover, numbered, chart }) {
+function TrackRow({ track, i, list, ctx, showCover, numbered, chart, playlist }) {
   const cur = player.current.value;
   const isCurrent = cur && (cur.id === track.id || cur.replacedFrom === track.id);
   const isPlaying = isCurrent && player.playing.value;
@@ -36,10 +37,12 @@ function TrackRow({ track, i, list, ctx, showCover, numbered, chart }) {
     if (isCurrent) return player.toggle();
     player.playList(list, i, ctx);
   };
+  const menuExtra = playlist ? { playlist: { ...playlist, index: i } } : {};
   return (
     <div
       class={`track ${isCurrent ? "is-current" : ""} ${unavailable ? "is-unavailable" : ""}`}
       onDblClick={onPlay}
+      onContextMenu={(e) => openTrackMenu(e, track, menuExtra)}
       title={unavailable ? "Трек недоступен в вашем регионе" : undefined}
     >
       <div class="track-lead">
@@ -70,16 +73,11 @@ function TrackRow({ track, i, list, ctx, showCover, numbered, chart }) {
         <button class={`icon-btn like ${liked ? "on" : ""}`} onClick={() => player.like(track)} aria-label={liked ? "Убрать из «Мне нравится»" : "Мне нравится"}>
           <Icon name={liked ? "heart" : "heartOutline"} size={18} />
         </button>
-        <button
-          class="icon-btn hover-only"
-          onClick={() => player.playWave({ stationId: `track:${track.id}`, title: `Волна по треку «${track.title}»` })}
-          aria-label="Моя волна по треку"
-          title="Моя волна по треку"
-        >
-          <Icon name="wave" size={18} />
-        </button>
         <button class="icon-btn hover-only" onClick={() => player.enqueueNext([track])} aria-label="Играть следующим" title="Играть следующим">
           <Icon name="addQueue" size={18} />
+        </button>
+        <button class="icon-btn hover-only" onClick={(e) => openTrackMenu(e, track, menuExtra)} aria-label="Ещё" title="Ещё">
+          <Icon name="more" size={18} />
         </button>
       </div>
       <div class="track-dur">{duration(track.durationMs)}</div>
@@ -87,14 +85,17 @@ function TrackRow({ track, i, list, ctx, showCover, numbered, chart }) {
   );
 }
 
-/** ctx: { title, from, link } — откуда включили, для отчётов и подписи в плеере. */
-export function TrackList({ tracks, ctx = {}, showCover = true, numbered = false, chart = false, limit }) {
+/**
+ * ctx: { title, from, link } — откуда включили, для отчётов и подписи в плеере.
+ * playlist: { kind, onRemoved } — для своего плейлиста в меню появляется «Удалить из плейлиста».
+ */
+export function TrackList({ tracks, ctx = {}, showCover = true, numbered = false, chart = false, limit, playlist }) {
   const list = limit ? tracks.slice(0, limit) : tracks;
   if (!list.length) return <div class="empty">Здесь пока пусто</div>;
   return (
     <div class="tracklist">
       {list.map((t, i) => (
-        <TrackRow key={`${t.id}-${i}`} track={t} i={i} list={tracks} ctx={ctx} showCover={showCover} numbered={numbered} chart={chart} />
+        <TrackRow key={`${t.id}-${i}`} track={t} i={i} list={tracks} ctx={ctx} showCover={showCover} numbered={numbered} chart={chart} playlist={playlist} />
       ))}
     </div>
   );

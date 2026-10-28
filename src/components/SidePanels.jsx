@@ -5,10 +5,11 @@ import { panel } from "./PlayerBar.jsx";
 import { api } from "../lib/api.js";
 import { artistNames, duration } from "../lib/format.js";
 import * as p from "../player/engine.js";
+import { openTrackMenu } from "./ContextMenu.jsx";
 
 const SOURCE_NAMES = { yandex: "Яндекс Музыка", lrclib: "LRCLIB" };
 
-function Lyrics() {
+export function Lyrics() {
   const t = p.current.value;
   const [state, setState] = useState({ status: "idle" });
   const box = useRef(null);
@@ -81,6 +82,7 @@ function Queue() {
   const idx = p.index.value;
   const ctx = p.context.value;
   const box = useRef(null);
+  const [drag, setDrag] = useState(null); // { from, over }
   useEffect(() => {
     box.current?.querySelector(".q-item.on")?.scrollIntoView({ block: "center" });
   }, []);
@@ -92,8 +94,29 @@ function Queue() {
         <span class="queue-count">{list.length}</span>
       </div>
       {list.map((t, i) => (
-        <div key={`${t.id}-${i}`} class={`q-item ${i === idx ? "on" : ""} ${i < idx ? "past" : ""}`} onDblClick={() => p.playAt(i)}>
-          {t.cover ? <img src={t.cover} alt="" loading="lazy" /> : <div class="ph" />}
+        <div
+          key={`${t.id}-${i}`}
+          class={`q-item ${i === idx ? "on" : ""} ${i < idx ? "past" : ""} ${drag?.over === i && drag.from !== i ? (drag.from < i ? "drop-after" : "drop-before") : ""}`}
+          onDblClick={() => p.playAt(i)}
+          onContextMenu={(e) => openTrackMenu(e, t)}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = "move";
+            setDrag({ from: i, over: i });
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (drag && drag.over !== i) setDrag({ ...drag, over: i });
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (drag) p.moveInQueue(drag.from, i);
+            setDrag(null);
+          }}
+          onDragEnd={() => setDrag(null)}
+          title="Перетащите, чтобы изменить порядок"
+        >
+          {t.cover ? <img src={t.cover} alt="" loading="lazy" draggable={false} /> : <div class="ph" />}
           <button class="q-main" onClick={() => p.playAt(i)}>
             <span class="q-title">{t.title}</span>
             <span class="q-artist">{artistNames(t)}</span>

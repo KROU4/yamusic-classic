@@ -1,9 +1,11 @@
-// Настройки: подборка (анти-повтор), без цензуры, тексты, оформление, аккаунт.
+// Настройки: подборка (анти-повтор), без цензуры, звук, окно, оформление, аккаунт.
 import { useEffect, useState } from "preact/hooks";
 import { api, dropCache } from "../lib/api.js";
 import { toast } from "../lib/toast.js";
 import { theme, setTheme } from "../lib/theme.js";
+import { isDesktop } from "../lib/desktop.js";
 import { Loading } from "../components/States.jsx";
+import * as player from "../player/engine.js";
 
 function Toggle({ label, hint, checked, onChange }) {
   return (
@@ -156,6 +158,72 @@ export function SettingsPage({ me, onReconnect }) {
           onChange={(v) => save({ lyricsPrefer: v })}
         />
       </section>
+
+      <section class="settings-group">
+        <h2>Звук</h2>
+        <Choice
+          label="Кроссфейд"
+          hint="Плавное наложение конца трека на начало следующего"
+          value={prefs.crossfade}
+          options={[
+            [0, "Выкл."],
+            [3, "3 с"],
+            [5, "5 с"],
+            [8, "8 с"],
+            [12, "12 с"],
+          ]}
+          onChange={(v) => {
+            save({ crossfade: v });
+            player.setAudioConfig({ crossfade: v });
+          }}
+        />
+        <Toggle
+          label="Выравнивание громкости"
+          hint="Громкие треки приглушаются до общего уровня по данным R128, чтобы волна не «прыгала» по громкости"
+          checked={prefs.normalize}
+          onChange={(v) => {
+            save({ normalize: v });
+            player.setAudioConfig({ normalize: v });
+          }}
+        />
+      </section>
+
+      {isDesktop && (
+        <section class="settings-group">
+          <h2>Окно и Windows</h2>
+          <Toggle label="Сворачивать в трей при закрытии" hint="Крестик прячет окно, музыка продолжает играть. Выйти — через меню значка в трее" checked={prefs.closeToTray} onChange={(v) => save({ closeToTray: v })} />
+          <Toggle label="Запускать вместе с Windows" checked={prefs.autostart} onChange={(v) => save({ autostart: v })} />
+          <Toggle label="Запускать свёрнутым" hint="При автозапуске окно сразу уходит в трей" checked={prefs.startMinimized} onChange={(v) => save({ startMinimized: v })} />
+          <Toggle
+            label="Глобальные горячие клавиши"
+            hint="Работают, даже когда окно не в фокусе: Ctrl+Alt+Пробел — пауза, Ctrl+Alt+→/← — трек, Ctrl+Alt+↑/↓ — громкость, Ctrl+Alt+L — лайк"
+            checked={prefs.globalHotkeys}
+            onChange={(v) => save({ globalHotkeys: v })}
+          />
+          <Toggle
+            label="Статус в Discord"
+            hint="Показывать в профиле Discord, что сейчас играет. Нужен Application ID своего приложения с discord.com/developers (бесплатно, 1 минута)"
+            checked={prefs.discordRpc}
+            onChange={(v) => save({ discordRpc: v })}
+          />
+          {prefs.discordRpc && (
+            <div class="setting">
+              <span class="setting-text">
+                <span class="setting-label">Discord Application ID</span>
+                <span class="setting-hint">Название приложения в Discord станет заголовком статуса, например «YM Classic»</span>
+              </span>
+              <input
+                class="text-input"
+                inputMode="numeric"
+                placeholder="123456789012345678"
+                value={prefs.discordAppId}
+                onChange={(e) => save({ discordAppId: e.currentTarget.value.replace(/\D/g, "") })}
+                aria-label="Discord Application ID"
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       <section class="settings-group">
         <h2>Оформление</h2>

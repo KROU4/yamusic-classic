@@ -105,6 +105,9 @@ export function Header({ me }) {
         ))}
       </nav>
       <Search />
+      <a class={`icon-btn ${name === "stats" ? "on" : ""}`} href={href("/stats")} aria-label="Моя статистика" title="Моя статистика">
+        <Icon name="stats" />
+      </a>
       <a class={`icon-btn header-settings ${name === "settings" ? "on" : ""}`} href={href("/settings")} aria-label="Настройки" title="Настройки">
         <Icon name="settings" />
       </a>

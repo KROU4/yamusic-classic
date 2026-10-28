@@ -12,6 +12,7 @@ const ROUTES = [
   ["new", /^\/new$/],
   ["radio", /^\/radio$/],
   ["settings", /^\/settings$/],
+  ["stats", /^\/stats$/],
 ];
 
 function parse() {

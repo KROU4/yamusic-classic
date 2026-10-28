@@ -1,10 +1,14 @@
 // Оболочка Electron: поднимает локальный бэкенд и открывает окно с интерфейсом.
-import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session } from "electron";
+// Плюс интеграция с Windows: кнопки на миниатюре в панели задач, трей, мини-плеер,
+// автозапуск, глобальные горячие клавиши, статус в Discord.
+import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session, ipcMain, globalShortcut } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Service } from "../server/service.js";
 import { createServer } from "../server/http.js";
+import { renderPng, SHAPES } from "./png.js";
+import { DiscordPresence, activityFromState } from "./discord.js";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const t0 = Date.now();
@@ -21,11 +25,19 @@ app.setAppUserModelId("dev.krou4.ymclassic");
 const dataDir = app.getPath("userData");
 const boundsFile = path.join(dataDir, "window.json");
 const log = (...a) => console.log("[ymc]", ...a);
+const launchedHidden = process.argv.includes("--hidden");
 
 let win = null;
 let tray = null;
 let backend = null;
 let quitting = false;
+let miniMode = false;
+let normalBounds = null; // размер окна до перехода в мини-плеер
+let playerState = { playing: false };
+const discord = new DiscordPresence({ log });
+
+const MINI_SIZE = { width: 360, height: 600 };
+const FULL_MIN = { width: 980, height: 620 };
 
 function loadBounds() {
   try {
@@ -43,7 +55,8 @@ function loadBounds() {
 
 function saveBounds() {
   if (!win) return;
-  const b = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+  // в мини-режиме запоминаем обычный размер, а не крошечное окно
+  const b = miniMode && normalBounds ? { ...normalBounds, maximized: false } : { ...win.getNormalBounds(), maximized: win.isMaximized() };
   try {
     fs.writeFileSync(boundsFile, JSON.stringify(b));
   } catch {
@@ -65,6 +78,140 @@ async function startBackend() {
   return { svc, srv, url };
 }
 
+const prefs = () => backend?.svc.prefs || {};
+
+function control(method) {
+  win?.webContents.executeJavaScript(`window.__ymcControl && window.__ymcControl.${method}()`).catch(() => {});
+}
+
+function showWindow() {
+  if (!win) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+// ---------- кнопки на миниатюре в панели задач ----------
+const thumbIcons = {};
+const thumbIcon = (name) => (thumbIcons[name] ||= nativeImage.createFromBuffer(renderPng(32, SHAPES[name])));
+
+function updateThumbar() {
+  if (!win || process.platform !== "win32") return;
+  const has = !!playerState.id;
+  const flags = has ? [] : ["disabled"];
+  win.setThumbarButtons([
+    { tooltip: "Предыдущий", icon: thumbIcon("prev"), flags, click: () => control("prev") },
+    { tooltip: playerState.playing ? "Пауза" : "Играть", icon: thumbIcon(playerState.playing ? "pause" : "play"), click: () => control("toggle") },
+    { tooltip: "Следующий", icon: thumbIcon("next"), flags, click: () => control("next") },
+  ]);
+}
+
+// ---------- трей ----------
+function trayMenu() {
+  return Menu.buildFromTemplate([
+    { label: playerState.id ? `${playerState.title} — ${playerState.artist}`.slice(0, 60) : "YM Classic", enabled: false },
+    { type: "separator" },
+    { label: "Показать", click: showWindow },
+    { label: playerState.playing ? "Пауза" : "Играть", click: () => control("toggle") },
+    { label: "Следующий трек", click: () => control("next") },
+    { label: "Предыдущий трек", click: () => control("prev") },
+    { label: "Мне нравится", enabled: !!playerState.id, click: () => control("like") },
+    { type: "separator" },
+    {
+      label: "Выход",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+function updateTray() {
+  if (!tray) return;
+  tray.setToolTip(playerState.id ? `${playerState.playing ? "▶" : "❚❚"} ${playerState.title} — ${playerState.artist}`.slice(0, 127) : "YM Classic");
+  tray.setContextMenu(trayMenu());
+}
+
+function createTray() {
+  const icon = appIcon();
+  if (icon.isEmpty()) return;
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  updateTray();
+  tray.on("click", () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
+}
+
+// ---------- мини-плеер ----------
+function setMini(on) {
+  if (!win || on === miniMode) return;
+  if (on) {
+    normalBounds = win.isMaximized() ? null : win.getBounds();
+    if (win.isMaximized()) win.unmaximize();
+    miniMode = true;
+    win.setMinimumSize(300, 460);
+    const area = screen.getDisplayMatching(win.getBounds()).workArea;
+    // мини-плеер встаёт в правый нижний угол текущего монитора
+    win.setBounds({ ...MINI_SIZE, x: area.x + area.width - MINI_SIZE.width - 24, y: area.y + area.height - MINI_SIZE.height - 24 });
+    win.setAlwaysOnTop(true, "floating");
+  } else {
+    miniMode = false;
+    win.setAlwaysOnTop(false);
+    win.setMinimumSize(FULL_MIN.width, FULL_MIN.height);
+    if (normalBounds) win.setBounds(normalBounds);
+    else win.maximize();
+  }
+}
+
+// ---------- глобальные горячие клавиши ----------
+const HOTKEYS = {
+  "CommandOrControl+Alt+Space": "toggle",
+  "CommandOrControl+Alt+Right": "next",
+  "CommandOrControl+Alt+Left": "prev",
+  "CommandOrControl+Alt+Up": "volumeUp",
+  "CommandOrControl+Alt+Down": "volumeDown",
+  "CommandOrControl+Alt+L": "like",
+};
+
+function applyHotkeys(enabled) {
+  globalShortcut.unregisterAll();
+  if (!enabled) return;
+  for (const [accel, method] of Object.entries(HOTKEYS)) {
+    if (!globalShortcut.register(accel, () => control(method))) log("хоткей занят другой программой:", accel);
+  }
+}
+
+// ---------- Discord ----------
+function updateDiscord() {
+  const p = prefs();
+  if (!p.discordRpc || !/^\d{15,22}$/.test(p.discordAppId || "")) {
+    discord.disconnect();
+    return;
+  }
+  discord.connect(p.discordAppId).catch(() => {});
+  discord.setActivity(playerState.playing ? activityFromState(playerState) : null);
+}
+
+// ---------- настройки оболочки ----------
+function applyPrefs(p) {
+  // автозапуск регистрируем только у собранного приложения, иначе в автозагрузку попал бы electron.exe разработчика
+  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"] });
+  applyHotkeys(!!p.globalHotkeys);
+  updateDiscord();
+}
+
+ipcMain.on("ymc:state", (e, state) => {
+  if (e.sender !== win?.webContents) return;
+  playerState = state && typeof state === "object" ? state : { playing: false };
+  updateThumbar();
+  updateTray();
+  updateDiscord();
+});
+
+ipcMain.on("ymc:mini", (e, on) => {
+  if (e.sender !== win?.webContents) return;
+  setMini(!!on);
+});
+
 function createWindow(url, key) {
   const b = loadBounds();
   win = new BrowserWindow({
@@ -72,14 +219,15 @@ function createWindow(url, key) {
     y: b.y,
     width: b.width,
     height: b.height,
-    minWidth: 980,
-    minHeight: 620,
+    minWidth: FULL_MIN.width,
+    minHeight: FULL_MIN.height,
     show: false,
     backgroundColor: "#141414",
     autoHideMenuBar: true,
     title: "YM Classic",
     icon: appIcon(),
     webPreferences: {
+      preload: path.join(root, "electron", "preload.cjs"),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -103,14 +251,25 @@ function createWindow(url, key) {
   });
 
   win.once("ready-to-show", () => {
-    win.show();
-    log(`окно показано через ${Date.now() - t0} мс после старта`);
+    // запуск из автозагрузки с «Запускать свёрнутым» — окно остаётся в трее
+    const stayHidden = launchedHidden && prefs().startMinimized && !process.env.YMC_SHOTS;
+    if (!stayHidden) win.show();
+    updateThumbar();
+    log(`окно ${stayHidden ? "готово (в трее)" : "показано"} через ${Date.now() - t0} мс после старта`);
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
   });
+  win.on("show", updateThumbar);
+
   // перед закрытием окно отправляет текущее прослушивание в историю (анти-повтор и отчёт Яндексу)
   let finalized = false;
   win.on("close", (e) => {
     saveBounds();
+    if (!quitting && prefs().closeToTray && tray) {
+      // «свернуть в трей при закрытии»: музыка продолжает играть
+      e.preventDefault();
+      win.hide();
+      return;
+    }
     if (finalized) return;
     e.preventDefault();
     finalized = true;
@@ -130,7 +289,7 @@ function createWindow(url, key) {
   win.loadURL(`${url}#k=${key}`);
 }
 
-// Smoke-режим для визуальной проверки: YMC_SHOTS=путь к JSON [{ hash?, js?, wait?, file }].
+// Smoke-режим для визуальной проверки: YMC_SHOTS=путь к JSON [{ hash?, js?, wait?, file, mini? }].
 // Шаги выполняются по очереди в настоящем окне, после каждого с file — снимок окна.
 async function runShots(specFile) {
   const steps = JSON.parse(fs.readFileSync(specFile, "utf8"));
@@ -156,40 +315,7 @@ async function runShots(specFile) {
   app.quit();
 }
 
-function control(js) {
-  win?.webContents.executeJavaScript(js).catch(() => {});
-}
-
-function createTray() {
-  const icon = appIcon();
-  if (icon.isEmpty()) return;
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
-  tray.setToolTip("YM Classic");
-  const menu = Menu.buildFromTemplate([
-    { label: "Показать", click: () => (win ? (win.show(), win.focus()) : null) },
-    { type: "separator" },
-    { label: "Играть / пауза", click: () => control("navigator.mediaSession && document.querySelector('.play-main')?.click()") },
-    { label: "Следующий трек", click: () => control("document.querySelector('[aria-label=\"Следующий\"]')?.click()") },
-    { label: "Предыдущий трек", click: () => control("document.querySelector('[aria-label=\"Предыдущий\"]')?.click()") },
-    { type: "separator" },
-    {
-      label: "Выход",
-      click: () => {
-        quitting = true;
-        app.quit();
-      },
-    },
-  ]);
-  tray.setContextMenu(menu);
-  tray.on("click", () => (win?.isVisible() && win.isFocused() ? win.hide() : (win?.show(), win?.focus())));
-}
-
-app.on("second-instance", () => {
-  if (!win) return;
-  if (win.isMinimized()) win.restore();
-  win.show();
-  win.focus();
-});
+app.on("second-instance", showWindow);
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
@@ -199,6 +325,8 @@ app.whenReady().then(async () => {
   log(`бэкенд готов через ${Date.now() - t0} мс`);
   createWindow(backend.url, backend.srv.key);
   createTray();
+  applyPrefs(prefs());
+  backend.svc.onPrefs((next) => applyPrefs(next));
 });
 
 app.on("before-quit", () => {
@@ -207,6 +335,8 @@ app.on("before-quit", () => {
 
 // will-quit наступает после закрытия окон — к этому моменту финальное прослушивание уже записано
 app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  discord.disconnect();
   backend?.svc.store.saveNow();
 });
 

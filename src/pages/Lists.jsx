@@ -6,8 +6,10 @@ import { Section, Row, AlbumCard, ArtistCard, PlaylistCard } from "../components
 import { StationGrid } from "../components/Wave.jsx";
 import { Loading, ErrorState, PageHead } from "../components/States.jsx";
 import { Icon } from "../components/Icon.jsx";
-import { href } from "../lib/router.js";
+import { href, go } from "../lib/router.js";
 import { plural } from "../lib/format.js";
+import { api, dropCache } from "../lib/api.js";
+import { toast } from "../lib/toast.js";
 import * as player from "../player/engine.js";
 
 export function SearchPage({ q }) {
@@ -99,6 +101,26 @@ export function CollectionPage({ tab = "likes" }) {
         ))}
       </div>
       {tab === "likes" && <Likes />}
+      {tab === "playlists" && (
+        <div class="page-actions">
+          <button
+            class="btn ghost"
+            onClick={async () => {
+              const title = prompt("Название нового плейлиста", "Новый плейлист");
+              if (!title) return;
+              try {
+                const r = await api.post("/my/playlists", { title });
+                dropCache("/collection");
+                go(`/playlist/${r.playlist.uid}/${r.playlist.kind}`);
+              } catch (e) {
+                toast(e.message);
+              }
+            }}
+          >
+            <Icon name="plus" size={16} /> Создать плейлист
+          </button>
+        </div>
+      )}
       {tab !== "likes" && loading && !data && <Loading />}
       {tab !== "likes" && error && !data && <ErrorState error={error} />}
       {tab !== "likes" && data && (

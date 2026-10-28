@@ -1,12 +1,13 @@
 // Страницы сущностей: альбом, исполнитель, плейлист.
 import { useState } from "preact/hooks";
 import { useLoad } from "../lib/useLoad.js";
-import { api } from "../lib/api.js";
+import { api, dropCache } from "../lib/api.js";
+import { me } from "../lib/session.js";
 import { TrackList, ExplicitBadge } from "../components/TrackList.jsx";
 import { Section, Row, AlbumCard, ArtistCard, PlaylistCard } from "../components/Cards.jsx";
 import { Loading, ErrorState, PageHead } from "../components/States.jsx";
 import { Icon } from "../components/Icon.jsx";
-import { href } from "../lib/router.js";
+import { href, go } from "../lib/router.js";
 import { plural, totalDuration, ALBUM_TYPES } from "../lib/format.js";
 import { toast } from "../lib/toast.js";
 import * as player from "../player/engine.js";
@@ -138,21 +139,76 @@ export function ArtistPage({ id }) {
 }
 
 export function PlaylistPage({ uid, kind }) {
-  const { data, loading, error } = useLoad(`/playlist/${uid}/${kind}`);
+  // версия в адресе — способ перечитать плейлист после правки (сервер смотрит только на путь)
+  const [version, setVersion] = useState(0);
+  const { data, loading, error } = useLoad(`/playlist/${uid}/${kind}${version ? `?v=${version}` : ""}`);
   if (loading && !data) return <Loading />;
   if (error && !data) return <ErrorState error={error} />;
   const { playlist, tracks } = data;
+  const own = me.value?.uid != null && String(me.value.uid) === String(uid);
+  const refresh = () => {
+    dropCache(`/playlist/${uid}/${kind}`);
+    setVersion((v) => v + 1);
+  };
   const ctx = { title: playlist.title, link: `/playlist/${uid}/${kind}`, from: "desktop_win-playlist-playlist-default" };
+  const rename = async () => {
+    const title = prompt("Новое название плейлиста", playlist.title);
+    if (!title || title === playlist.title) return;
+    try {
+      await api.post(`/my/playlists/${kind}/rename`, { title });
+      dropCache("/collection");
+      refresh();
+    } catch (e) {
+      toast(e.message);
+    }
+  };
+  const remove = async () => {
+    if (!confirm(`Удалить плейлист «${playlist.title}»? Это нельзя отменить.`)) return;
+    try {
+      await api.post(`/my/playlists/${kind}/delete`);
+      dropCache("/collection");
+      toast("Плейлист удалён");
+      go("/collection/playlists");
+    } catch (e) {
+      toast(e.message);
+    }
+  };
   return (
     <div class="page">
-      <PageHead cover={playlist.cover} kicker="Плейлист" title={playlist.title} actions={<PlayButtons tracks={tracks} ctx={ctx} />}>
+      <PageHead
+        cover={playlist.cover}
+        kicker={own ? "Мой плейлист" : "Плейлист"}
+        title={playlist.title}
+        actions={
+          <PlayButtons
+            tracks={tracks}
+            ctx={ctx}
+            extra={
+              own && (
+                <>
+                  <button class="icon-btn" onClick={rename} aria-label="Переименовать" title="Переименовать">
+                    <Icon name="edit" />
+                  </button>
+                  <button class="icon-btn" onClick={remove} aria-label="Удалить плейлист" title="Удалить плейлист">
+                    <Icon name="trash" />
+                  </button>
+                </>
+              )
+            }
+          />
+        }
+      >
         <div class="page-meta">
           {playlist.owner && `${playlist.owner} · `}
           {plural(tracks.length, "трек", "трека", "треков")}, {totalDuration(tracks)}
         </div>
         {playlist.description && <p class="page-desc">{playlist.description}</p>}
       </PageHead>
-      <TrackList tracks={tracks} ctx={ctx} />
+      {own && !tracks.length ? (
+        <div class="empty">Плейлист пуст. Добавляйте треки через меню «…» или правым кликом по треку.</div>
+      ) : (
+        <TrackList tracks={tracks} ctx={ctx} playlist={own ? { kind, onRemoved: refresh } : undefined} />
+      )}
     </div>
   );
 }

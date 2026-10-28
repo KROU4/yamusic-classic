@@ -1,16 +1,18 @@
 // Нижняя панель плеера в духе классической Яндекс Музыки.
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { signal } from "@preact/signals";
 import { Icon } from "./Icon.jsx";
 import { ExplicitBadge, Artists } from "./TrackList.jsx";
 import { seconds } from "../lib/format.js";
 import { href } from "../lib/router.js";
+import { nowPlayingOpen } from "../lib/ui.js";
+import { isDesktop, setMini } from "../lib/desktop.js";
 import * as p from "../player/engine.js";
 
 export const panel = signal(null); // null | "lyrics" | "queue"
 export const togglePanel = (name) => (panel.value = panel.value === name ? null : name);
 
-function Progress() {
+export function Progress() {
   const bar = useRef(null);
   const [hover, setHover] = useState(null);
   const dur = p.duration.value || 0;
@@ -56,7 +58,7 @@ function Progress() {
   );
 }
 
-function Volume() {
+export function Volume() {
   const ref = useRef(null);
   const v = p.muted.value ? 0 : p.volume.value;
   const set = (e) => {
@@ -94,6 +96,78 @@ function Volume() {
   );
 }
 
+const SLEEP_OPTIONS = [
+  [15, "15 минут"],
+  [30, "30 минут"],
+  [45, "45 минут"],
+  [60, "1 час"],
+  [90, "1,5 часа"],
+  ["track", "До конца трека"],
+];
+
+/** Таймер сна: кнопка с луной и выпадающий список. */
+function SleepTimer() {
+  const [open, setOpen] = useState(false);
+  const [, tick] = useState(0);
+  const st = p.sleepTimer.value;
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => !box.current?.contains(e.target) && setOpen(false);
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [open]);
+  // обновляем оставшееся время раз в 15 секунд, пока таймер активен
+  useEffect(() => {
+    if (st?.mode !== "time") return;
+    const id = setInterval(() => tick((x) => x + 1), 15000);
+    return () => clearInterval(id);
+  }, [st]);
+  const left = st?.mode === "time" ? Math.max(1, Math.ceil((st.at - Date.now()) / 60000)) : null;
+  const label = st ? (st.mode === "track" ? "Таймер сна: до конца трека" : `Таймер сна: ${left} мин`) : "Таймер сна";
+  return (
+    <div class="popover-wrap" ref={box}>
+      <button class={`icon-btn ${st ? "on" : ""}`} onClick={() => setOpen(!open)} aria-label={label} title={label} aria-expanded={open}>
+        <Icon name="moon" />
+        {left != null && <span class="icon-badge">{left}</span>}
+      </button>
+      {open && (
+        <div class="popover" role="menu">
+          <div class="popover-title">Остановить музыку</div>
+          {SLEEP_OPTIONS.map(([v, l]) => (
+            <button
+              key={v}
+              class="menu-item"
+              role="menuitem"
+              onClick={() => {
+                p.setSleepTimer(v);
+                setOpen(false);
+              }}
+            >
+              {l}
+            </button>
+          ))}
+          {st && (
+            <>
+              <div class="menu-sep" />
+              <button
+                class="menu-item danger"
+                role="menuitem"
+                onClick={() => {
+                  p.setSleepTimer(null);
+                  setOpen(false);
+                }}
+              >
+                Выключить таймер
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PlayerBar() {
   const t = p.current.value;
   const ctx = p.context.value;
@@ -118,9 +192,12 @@ export function PlayerBar() {
         <div class="player-track">
           {t ? (
             <>
-              <a class="player-cover" href={t.albumId ? href(`/album/${t.albumId}`) : undefined}>
+              <button class="player-cover" onClick={() => (nowPlayingOpen.value = true)} aria-label="Открыть «Сейчас играет»" title="Сейчас играет">
                 {t.cover ? <img src={t.cover} alt="" /> : <div class="ph" />}
-              </a>
+                <span class="player-cover-hint">
+                  <Icon name="expand" size={18} />
+                </span>
+              </button>
               <div class="player-meta">
                 <div class="player-title">
                   <span class="t">{t.title}</span>
@@ -169,6 +246,12 @@ export function PlayerBar() {
           <button class={`icon-btn ${panel.value === "queue" ? "on" : ""}`} onClick={() => togglePanel("queue")} aria-label="Очередь" title="Очередь">
             <Icon name="queue" />
           </button>
+          <SleepTimer />
+          {isDesktop && (
+            <button class="icon-btn" onClick={() => setMini(true)} aria-label="Мини-плеер" title="Мини-плеер поверх окон">
+              <Icon name="mini" />
+            </button>
+          )}
           <Volume />
         </div>
       </div>

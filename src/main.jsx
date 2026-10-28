@@ -1,6 +1,7 @@
 import { render } from "preact";
 import "./lib/api.js"; // первым: забирает ключ запуска из адреса
 import "./lib/theme.js";
+import "./lib/desktop.js";
 import "./styles/app.css";
 import { App } from "./app.jsx";
 import * as player from "./player/engine.js";
