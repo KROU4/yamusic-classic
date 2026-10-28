@@ -1,4 +1,13 @@
-# YM Classic
+<p align="center"><img src="build/logo.svg" width="112" alt=""></p>
+
+<h1 align="center">YM Classic</h1>
+
+<p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/KROU4/yamusic-classic?label=release&color=ffcc33" alt="Latest release"></a>
+  <a href="../../actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/KROU4/yamusic-classic/ci.yml?branch=main&label=CI" alt="CI"></a>
+  <a href="../../releases"><img src="https://img.shields.io/github/downloads/KROU4/yamusic-classic/total?color=555" alt="Downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/KROU4/yamusic-classic?color=555" alt="MIT license"></a>
+</p>
 
 An unofficial open-source Yandex Music desktop client for Windows. It recreates the Yandex Music design of 2023–2024: a sidebar, an animated "My Wave" hero and no genre wheel. It also fixes the most common complaints about the official app: repeats in recommendations, censored tracks and lyrics, and a slow, heavy UI.
 
@@ -9,11 +18,12 @@ The user interface is in Russian, like the service it is built for. The code, co
 ## Features
 
 **Design**
-- The official layout and design tokens: a full-height sidebar (Home, Chart, New releases, Radio, Podcasts & books, Collection, Stats, "Liked", your pins and your Yandex avatar), a rounded content panel and a floating player bar tinted with the cover colour. The sidebar can collapse to icons.
+- The official layout and design tokens: a full-height sidebar (Home, Chart, New releases, Radio, Podcasts & books, Collection, Stats, "Liked", your pins, Settings and your Yandex avatar, which opens your Yandex ID account), a rounded content panel and a floating player bar tinted with the cover colour. The sidebar can collapse to icons.
 - **My Wave hero.**
   - The official orb: the client plays the My Wave animation loop of the **official app installed on the same PC** (read from its own files at runtime, nothing is bundled) and makes it react to the music — it breathes with the bass and flares on a like.
   - Its hue follows the selected mood or activity.
-  - Modes: official (default when the official app is installed), own WebGL shader, lite (CSS only) and off.
+  - **Smooth at any refresh rate.** The official loop is 25 fps; the client cross-fades its decoded frames in WebGL, so the orb moves at 60 fps or at your screen's own rate (120/144 Hz). A 30 fps economy mode plays the plain video.
+  - Modes: official (default when the official app is installed), own WebGL shader, lite (CSS only) and off. The music reaction can be turned off.
   - It pauses when off-screen or minimised.
 - **Wave settings like in 2023.** Activity (waking up, workout, on the road, working, studying, party, falling asleep), character, mood and language. Changes apply live to the playing wave, and any combination can be pinned to the sidebar.
 - **My Wave from a text prompt.** Describe what you want ("спокойный джаз для работы") and the wave starts from it; prompts can be pinned too.
@@ -22,7 +32,13 @@ The user interface is in Russian, like the service it is built for. The code, co
 - The home page has "For you" and "Trends" tabs, with genres, moods, activities and epochs.
 - A calm player bar: transport in the middle; lyrics, queue and volume on the right; source, quality, sleep timer, speed, equalizer and mini player behind «Ещё». Only non-default states (a running timer, a changed speed, FLAC) show as small chips.
 - Layouts for every window size Windows snapping produces — maximised, half, quarter and a third of a 1080p screen: the sidebar compacts and scrolls, the player turns into a compact bar with a thin seek line, Now Playing switches between cover and lyrics.
-- A full-screen "Now playing" view with karaoke lyrics, a mini player, and dark and light themes. Keyboard-operable sliders and visible focus everywhere.
+- A full-screen "Now playing" view with karaoke lyrics, a mini player, and dark and light themes with six accent colours. Keyboard-operable sliders and visible focus everywhere.
+
+**Settings**
+- One page with a section index and a card per area; what the official app doesn't have is marked «Только в YM Classic».
+- My Wave: animation mode with a live preview, smoothness (30 / 60 fps / screen rate), music reaction.
+- Look: theme, accent colour (yellow, orange, pink, violet, blue, mint), UI zoom, fewer animations.
+- Player: seek step (5–30 s) and volume step (2–10%) for the keyboard, sliders, mouse wheel and global hotkeys; time left instead of the length; cover-tinted player bar; a silent Windows notification on track change while the window is in the background.
 
 **Sound**
 - **Quality**: economy (HE-AAC 64), normal (AAC 192) or lossless. Lossless plays FLAC wherever Yandex offers it to your account: the encrypted stream (AES-128-CTR, key from the API) is decrypted on the fly by the local backend for playback only, with seeking.
@@ -79,7 +95,7 @@ The user interface is in Russian, like the service it is built for. The code, co
 - System media keys and the SMTC overlay.
 - UI zoom from 75% to 150%. Press `?` to see every shortcut.
 
-**Fast.** The window opens in about 0.5 s. The UI bundle is about 125 KB of JS and 37 KB of CSS, while the official app ships a ~47 MB web bundle. Revisited pages load instantly, and scroll positions are kept.
+**Fast.** The window opens in about 0.5 s. The UI bundle is about 195 KB of JS and 65 KB of CSS, while the official app ships a ~47 MB web bundle. Revisited pages load instantly, and scroll positions are kept.
 
 ## Download
 
@@ -108,6 +124,7 @@ npm start
 | `npm test` | Unit tests: signatures, session lookup, anti-repeat rules, LRC, uncensor, HTTP hardening, stats, pins |
 | `npm run dist` | Builds the installer and the portable exe into `release/` |
 | `node scripts/smoke.js` | Live backend check against your own session. It prints summaries only, never the token |
+| `npx electron scripts/render-icons.cjs` | Renders `build/logo.svg`, `build/tray.svg` and `build/social.svg` into the app, tray and social-preview PNGs |
 
 If `npm install` did not download Electron (npm 11 blocks install scripts), run `npm approve-scripts electron`.
 
@@ -125,8 +142,8 @@ There are two ways to trigger it:
 - Push a tag:
 
   ```bash
-  git tag v0.2.0
-  git push origin v0.2.0
+  git tag v1.0.0
+  git push origin v1.0.0
   ```
 
 - Or run the **Release** workflow manually with a version number.
