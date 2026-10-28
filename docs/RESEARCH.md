@@ -28,7 +28,10 @@ The keys are the player's public per-platform constants (`config.player.secretKe
 ## Playback and quality
 
 - `get-file-info` with `transports=raw` returns unencrypted AAC-MP4 or MP3, which the browser plays directly.
-- The official client gets lossless through `encraw`: the stream is AES-encrypted and the key comes in the response. YM Classic deliberately does **not** implement decryption, since that would circumvent content protection. So the quality is 192 kbit/s AAC, the same as the server gives in the open stream.
+- Quality values: `lq` (HE-AAC-MP4 64), `nq` (AAC-MP4 192), `lossless` (FLAC / FLAC-in-MP4), plus `hq`, `preview`, `smart_preview`. The official Electron client asks for `codecs=flac,aac,he-aac,mp3,flac-mp4,aac-mp4,he-aac-mp4` with `transports=encraw`.
+- **`encraw` encryption** (from chunk 9616 and verified on the live CDN): AES-128-CTR, the 16-byte key is `downloadInfo.key` (32 hex chars), the initial counter is 16 zero bytes and the whole file is one CTR stream — byte `N` decrypts with counter `floor(N/16)` (128-bit big-endian) after skipping `N % 16` keystream bytes. A decrypted `encraw` file is byte-identical to the `raw` file of the same track. Files are plain (non-fragmented) MP4 with `moov` up front, which Chromium plays directly.
+- YM Classic decrypts on the fly in its local backend (`server/media.js`): the player gets a one-off `/media/<random id>` link, each HTTP range is fetched from the CDN aligned to 16 bytes and decrypted from the right counter, so seeking works without downloading the file. The key never reaches the UI and nothing is written to disk — this is playback for an entitled subscriber, the same as the official client does.
+- **Lossless availability is decided by Yandex per account/region.** For the account this was developed on (`account/about` region codes point outside Russia) every request for `lossless` or `hq` is silently answered with `quality: "nq"` (AAC 192) — for 15 popular tracks, with official headers and signing keys, on all three file-info endpoints. The client therefore shows the codec/bitrate actually returned and falls back to AAC 192.
 
 ## How the "censorship" works
 
@@ -39,6 +42,8 @@ Nobody cuts words out in real time. There are three mechanisms:
 3. **"Clean" releases** (`contentWarning: clean`). YM Classic looks for the explicit version of the same song by the same artist with a similar duration and substitutes it.
 
 Limitation: if the rights holder or Yandex **replaced the audio file in place** (as with the Anacondaz track in 2025), the original is not in the API and the client cannot bring it back.
+
+**Case study: МУККА «Девочка с каре»** (track 50400505, the only version in the catalogue, album 2019, `contentWarning: explicit`). All quality levels and both transports return the same AAC 192 file. An RMS envelope (20 ms windows) shows no muted gaps in the mix but a repeatable ~6 dB dip about 1 s into every chorus line (0:16, 0:55, 1:08, 1:59, 2:12, 2:24 by LRCLIB timings) — the vocal is ducked on one word while the beat keeps going. That is an edit of the master itself, so no request can return the original. YM Classic offers «Заменить звук своим файлом…»: the user's own copy is served for that track through the same local media endpoint.
 
 **Lyrics.** In Yandex's lyrics the censorship shows up as `б***`. YM Classic recognizes this and shows the full synced lyrics from [LRCLIB](https://lrclib.net).
 
@@ -61,3 +66,21 @@ Sources of reviews and articles: [research-sources.md](research-sources.md).
 ## Audio graph and CORS
 
 The audio CDN (`*.strm.yandex.net`) only returns `Access-Control-Allow-Origin` for `https://music.yandex.ru`. Without that header, `createMediaElementSource` outputs silence. So the Electron shell adds the header to every media response (the window only loads media from Yandex stream URLs; a narrower host filter would make a stream from an unexpected CDN host or redirect fail to play at all), and the renderer sets `crossOrigin="anonymous"`. That enables the 10-band EQ and the audio-reactive animation. Chromium does not apply `HTMLMediaElement.volume` to a MediaElementSource output, so volume, mute and crossfade use a per-element GainNode. The probe script is `scripts/probe-cors.js`.
+
+## My Wave from a text prompt and "My Wave for two"
+
+- **Query to Vibe.** The official client starts My Wave from free text with a `q2v:` seed in `rotor/session/new`; the seed is built locally from the text (see `src/lib/q2v.js`), no search request is needed. Settings seeds are not mixed in, so the prompt is not overridden by mood/language filters.
+- **Multivibe ("for two").** Rooms are created/joined through the rooms API (`server/rooms.js`); an invite is a `https://music.yandex.ru/multivibe/<id>` link. Creating and accepting an invite needs two accounts and was not exercised live; error codes are mapped to readable messages.
+
+## Podcasts and audiobooks
+
+Landing blocks, the user's shelf, categories, episode lists and listening progress follow the official client (`server/podcasts.js`). Progress is saved like the official client does — on pause, on track change, every 30 s and on window close — and an episode resumes from the server position; reporting starts only after the resume seek has happened, so a few seconds from zero never overwrite the saved place.
+
+## Lyrics: translation and word timing
+
+- Yandex's lyrics API has formats TEXT / LRC / RICH_JSON but **no translation**; the «Перевод» toggle uses machine translation (Google Translate) for non-Russian lyrics and labels it as such.
+- Word timings come from LRCLIB when a record has them (enhanced LRC `<mm:ss.xx>` word tags or a YAML "Lyricsfile"); they are aligned onto Yandex's lines when the texts match, otherwise the LRCLIB lyrics are shown whole.
+
+## Ynison (cross-device sync)
+
+Connection: `wss://ynison.music.yandex.ru/redirector.YnisonRedirectService/GetRedirectToYnison` with auth and device info in the `Sec-WebSocket-Protocol` JSON (an `Origin` header is required), then the state service on the returned host with the ticket. A newly connected device first sends an empty, paused `update_full_state` marked not active; control commands are `update_playing_status` / `update_player_state` with incremented versions; int64 fields are sent as strings. YM Classic keeps this **off by default**. The handshake was verified live (passively); the state exchange was verified against a local mock server only, never by sending state to the real service during development.

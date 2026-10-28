@@ -9,19 +9,22 @@ The user interface is in Russian, like the service it is built for. The code, co
 ## Features
 
 **Design**
-- A 2023-era layout. The sidebar holds the sections (Home, Chart, New releases, Radio, Collection, Stats), "Liked" and your pinned items. It can collapse to icons.
+- The official layout and design tokens: a full-height sidebar (Home, Chart, New releases, Radio, Podcasts & books, Collection, Stats, "Liked", your pins and your Yandex avatar), a rounded content panel and a floating player bar tinted with the cover colour. The sidebar can collapse to icons.
 - **My Wave hero.**
-  - A generative, audio-reactive animation on its own WebGL shader: a glowing ring breathes with the bass and ripples outward.
-  - The colours follow the selected mood or activity, and liking a track makes the ring flash.
+  - A generative, audio-reactive orb on its own WebGL shader, modelled on the official 2024 animation: drifting colour layers with a bright core, a soft bloom and light rays. The bass makes it breathe and stretches the rays.
+  - The colours follow the selected mood or activity, and liking a track makes it flash.
   - Three modes: full, lite (CSS only) and off.
   - It pauses when off-screen or minimised.
 - **Wave settings like in 2023.** Activity (waking up, workout, on the road, working, studying, party, falling asleep), character, mood and language. Changes apply live to the playing wave, and any combination can be pinned to the sidebar.
+- **My Wave from a text prompt.** Describe what you want ("спокойный джаз для работы") and the wave starts from it; prompts can be pinned too.
+- **My Wave for two.** Create an invite link or join one and listen to a shared wave with another person (needs the feature enabled for both accounts on Yandex's side).
 - **Pins.** Pin playlists, albums, artists and wave settings to the sidebar, then reorder them by dragging.
 - The home page has "For you" and "Trends" tabs, with genres, moods, activities and epochs.
 - A centred player bar, a full-screen "Now playing" view with karaoke lyrics (the wave animation plays behind it), a mini player, and dark and light themes.
 
 **Sound**
-- A **10-band equalizer** with presets, routed through a Web Audio graph. Boosts are offset by a preamp, so they don't clip.
+- **Quality**: economy (HE-AAC 64), normal (AAC 192) or lossless. Lossless plays FLAC wherever Yandex offers it to your account: the encrypted stream (AES-128-CTR, key from the API) is decrypted on the fly by the local backend for playback only, with seeking.
+- A **10-band equalizer** with presets, routed through a Web Audio graph. The preamp compensates the peak of the combined response, so boosts don't clip.
 - **Crossfade** of 3–12 s with equal-power curves.
 - **Loudness normalisation** by EBU R128. Loud tracks are attenuated and quiet ones boosted by up to +4 dB.
 - **Playback speed** from 0.5× to 2×. Pitch stays the same.
@@ -40,6 +43,15 @@ The user interface is in Russian, like the service it is built for. The code, co
 - The original track instead of a substituted one.
 - An explicit twin for "clean" releases.
 - Full synced lyrics from [LRCLIB](https://lrclib.net) when Yandex's lyrics are censored.
+- **Your own file for a track.** When Yandex edited the audio master itself (the word is muted in the only file it has — e.g. МУККА «Девочка с каре»), no API request can bring the original back. Choose «Заменить звук своим файлом…» in the track menu and the client plays your copy instead; likes, queue and stats keep working.
+
+**Lyrics**
+- Synced karaoke lyrics with **word-by-word highlighting** where LRCLIB has word timings (enhanced LRC / Lyricsfile), line-level otherwise.
+- A **«Перевод»** toggle for non-Russian lyrics: a machine translation (Google Translate) under each line. Yandex has no lyrics translation API.
+
+**Podcasts & audiobooks**
+- A «Подкасты и книги» section with the official landing blocks, your shelf, categories and "continue listening".
+- Podcast and book pages with episodes/chapters, publication dates, listened state and progress; playback resumes where you stopped, and progress is saved back to Yandex like the official client does.
 
 **Library**
 - A track context menu: queue, wave by track, add to playlist (or create one in place), go to album or artist, like or dislike, copy link.
@@ -50,6 +62,9 @@ The user interface is in Russian, like the service it is built for. The code, co
 **Other devices (Ynison, beta, off by default)**
 - Turn it on in Settings, and the client joins your account's device list: the phone can hand playback over to it and pause, seek or switch tracks here.
 - The «Устройства» button in the player bar shows what plays on your other devices, controls it (play/pause, previous/next, seek) and takes it over with «Слушать здесь» from the same position.
+
+**Updates**
+- The installed version updates itself from GitHub Releases in the background and installs on restart; the portable version shows when a new release is available.
 
 **Windows integration**
 - Thumbnail toolbar buttons, a tray icon showing the current track, and close to tray.
@@ -142,9 +157,10 @@ Notes on the official client, request signatures, how the censorship works and t
 
 ## Limitations
 
-- Audio quality tops out at 192 kbps AAC. The official app gets lossless as an encrypted stream, and this client deliberately does not decrypt it.
-- If a track's audio file was replaced with an edited one on the server, the original cannot be recovered.
-- Podcasts and audiobooks and offline downloads are not supported. Ynison is a beta: its message formats follow the official client and open implementations and are tested against a local mock server, but full sync with a real phone is not verified yet.
+- Lossless depends on Yandex: it offers FLAC only to some accounts/regions (the account this was developed on only gets AAC 192, the official client included). Without it the "lossless" setting falls back to AAC 192.
+- If a track's audio file was replaced with an edited one on the server, the original cannot be recovered from Yandex — use your own file for that track.
+- Ynison (cross-device sync) is a beta and off by default; it was verified against a local mock and the live handshake, not yet against a real phone session.
+- Offline downloads are not supported.
 - The equalizer and the audio-reactive animation work only in the desktop app. In a plain browser the audio CDN does not allow cross-origin analysis, so the animation falls back to an idle "breathing" mode.
 
 ## License
