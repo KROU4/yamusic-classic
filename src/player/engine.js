@@ -398,8 +398,9 @@ export async function next({ auto = false, reason } = {}) {
     const cur = queue.value[i];
     await maybeExtendWave();
     // пока ждали треки, пользователь включил другую очередь или другой трек в этой.
-    // Сравниваем сам трек, а не позицию: правка очереди выше текущего трека не должна глушить волну
-    const j = queue.value.indexOf(cur);
+    // Правка очереди выше текущего трека сдвигает index.value вместе с ним, поэтому проверяем, что на текущей
+    // позиции тот же объект (поиск indexOf споткнулся бы о дубль этого трека в очереди)
+    const j = queue.value[index.value] === cur ? index.value : -1;
     if (gen !== queueGen || ig !== intentGen || j < 0 || j !== index.value) return;
     if (j < queue.value.length - 1) return load(j + 1);
   }
@@ -541,7 +542,9 @@ export function setSleepTimer(minutes) {
         clearInterval(sleepFadeTimer);
         sleepFadeTimer = null;
         cancelFade(); // кроссфейд не должен пережить затухание и зазвучать на полную после сброса sleepMul
-        // загрузка следующего трека, которая ещё идёт, иначе включит музыку уже после «спокойной ночи»
+        // загрузка следующего трека и ожидание треков волны, которые ещё идут, иначе включат музыку
+        // уже после «спокойной ночи» (next() и playWave сверяются с intentGen, load — с loadToken)
+        ++intentGen;
         ++loadToken;
         loading.value = false;
         audio.pause();
