@@ -7,6 +7,7 @@ import { Lyrics } from "./SidePanels.jsx";
 import { ExplicitBadge, Artists } from "./TrackList.jsx";
 import { openTrackMenu, menu } from "./ContextMenu.jsx";
 import { VibeCanvas, paletteFor } from "./VibeCanvas.jsx";
+import { isPromptStation, promptFromSeed, promptMood } from "../lib/q2v.js";
 import { seconds } from "../lib/format.js";
 import * as p from "../player/engine.js";
 
@@ -44,7 +45,7 @@ export function NowPlaying() {
       <div class="np-bg" style={cover ? { backgroundImage: `url(${cover})` } : undefined} />
       <div class="np-shade" />
       {/* during a wave its animation lives behind the cover */}
-      {ctx?.type === "wave" && <VibeCanvas colors={paletteFor(ctx.settings)} active />}
+      {ctx?.type === "wave" && <VibeCanvas colors={paletteFor(isPromptStation(ctx.stationId) ? promptMood(promptFromSeed(ctx.stationId) || ctx.title || "") : ctx.settings)} active />}
       <button class="icon-btn np-close" onClick={() => (nowPlayingOpen.value = false)} aria-label="Свернуть" title="Свернуть (Esc)">
         <Icon name="down" size={22} />
       </button>

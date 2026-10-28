@@ -1,5 +1,5 @@
 // Version comparison for update checks (pure: unit-tested without Electron).
-/** "1.2.10" > "1.2.9"; pre-release suffixes are ignored for ordering. */
+/** "1.2.10" > "1.2.9"; a pre-release sorts before its final release. */
 export function newerVersion(latest, current) {
   const p = (v) =>
     String(v || "")
@@ -12,5 +12,7 @@ export function newerVersion(latest, current) {
   for (let i = 0; i < Math.max(a.length, b.length); i++) {
     if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
   }
-  return false;
+  // same numbers: the final release is newer than its own pre-release (0.3.0 > 0.3.0-rc.1)
+  const pre = (v) => String(v || "").includes("-");
+  return pre(current) && !pre(latest);
 }

@@ -7,8 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { Transform } from "node:stream";
-import { Readable } from "node:stream";
+import { Transform, Readable, pipeline } from "node:stream";
 
 const TTL = 6 * 60 * 60 * 1000;
 export const AUDIO_EXT = { ".mp3": "audio/mpeg", ".flac": "audio/flac", ".m4a": "audio/mp4", ".mp4": "audio/mp4", ".aac": "audio/aac", ".ogg": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav" };
@@ -103,17 +102,19 @@ export class MediaRegistry {
     const { start, end } = range || { start: 0, end: size - 1 };
     res.writeHead(range ? 206 : 200, { ...head, "Content-Length": end - start + 1, ...(range ? { "Content-Range": `bytes ${start}-${end}/${size}` } : {}) });
     if (req.method === "HEAD") return res.end();
-    fs.createReadStream(e.path, { start, end }).on("error", () => res.destroy()).pipe(res);
+    // pipeline closes the file when the player aborts the range (it does on every seek)
+    pipeline(fs.createReadStream(e.path, { start, end }), res, () => {});
   }
 
-  async upstream(e, rangeHeader) {
-    let r = await this.fetch(e.url, { headers: rangeHeader ? { Range: rangeHeader } : {} });
+  async upstream(e, rangeHeader, signal) {
+    const get = () => this.fetch(e.url, { headers: rangeHeader ? { Range: rangeHeader } : {}, signal });
+    let r = await get();
     // signed CDN links expire; ask the owner for a fresh one once
     if ((r.status === 403 || r.status === 410 || r.status === 404) && e.refresh) {
       const fresh = await e.refresh();
       e.url = fresh.url;
       e.key = fresh.key;
-      r = await this.fetch(e.url, { headers: rangeHeader ? { Range: rangeHeader } : {} });
+      r = await get();
     }
     if (!r.ok) throw new Error(`upstream HTTP ${r.status}`);
     return r;
@@ -124,7 +125,20 @@ export class MediaRegistry {
     const start = want ? want.start : 0;
     const aligned = start - (start % 16);
     const upRange = want ? `bytes=${aligned}-${want.end ?? ""}` : aligned ? `bytes=${aligned}-` : null;
-    const up = await this.upstream(e, upRange);
+    // the player may abort the range before the CDN answers: abort the CDN request with it
+    const ctl = new AbortController();
+    res.on("close", () => ctl.abort());
+    let up;
+    try {
+      up = await this.upstream(e, upRange, ctl.signal);
+    } catch (err) {
+      if (ctl.signal.aborted) return;
+      throw err;
+    }
+    if (res.destroyed) {
+      up.body?.cancel?.().catch?.(() => {});
+      return;
+    }
     // total size from the upstream answer: Content-Range "bytes s-e/total" or Content-Length of a full response
     const cr = /\/(\d+)$/.exec(up.headers.get("content-range") || "");
     const total = cr ? Number(cr[1]) : Number(up.headers.get("content-length")) + aligned;
@@ -143,11 +157,8 @@ export class MediaRegistry {
       return res.end();
     }
     const decipher = crypto.createDecipheriv("aes-128-ctr", Buffer.from(e.key, "hex"), ctrIv(aligned));
-    const src = Readable.fromWeb(up.body);
-    // the player aborts ranges all the time while seeking: tear the upstream down with it
-    res.on("close", () => src.destroy());
-    src.on("error", () => res.destroy());
-    src.pipe(decipher).pipe(skipBytes(start - aligned)).pipe(res);
+    // pipeline tears every stage down together when the player aborts the range (it does on every seek)
+    pipeline(Readable.fromWeb(up.body), decipher, skipBytes(start - aligned), res, () => {});
   }
 }
 

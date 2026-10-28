@@ -26,5 +26,7 @@ describe("update version check", () => {
     expect(newerVersion("v0.2.0", "0.2.0")).toBe(false);
     expect(newerVersion("v0.1.9", "0.2.0")).toBe(false);
     expect(newerVersion("v1.0.0-rc.1", "0.9.9")).toBe(true);
+    expect(newerVersion("v0.3.0", "0.3.0-rc.1")).toBe(true);
+    expect(newerVersion("v0.3.0-rc.2", "0.3.0")).toBe(false);
   });
 });

@@ -15,6 +15,9 @@ export function createUpdater({ send, log, enabled }) {
   const portable = !!process.env.PORTABLE_EXECUTABLE_FILE;
   let state = { status: "idle", version: null, current: app.getVersion(), portable, url: RELEASES };
   let timer = null;
+  let startTimer = null;
+  let armed = null; // last effective "automatic checks" value: prefs saves that don't change it re-arm nothing
+  let downloaded = false; // an installer is waiting: later checks or errors must not hide the restart button
   const set = (patch) => {
     state = { ...state, ...patch };
     send(state);
@@ -27,9 +30,12 @@ export function createUpdater({ send, log, enabled }) {
     autoUpdater.on("checking-for-update", () => set({ status: "checking" }));
     autoUpdater.on("update-available", (i) => set({ status: "downloading", version: i.version, percent: 0 }));
     autoUpdater.on("download-progress", (p) => set({ status: "downloading", percent: Math.round(p.percent) }));
-    autoUpdater.on("update-downloaded", (i) => set({ status: "ready", version: i.version }));
+    autoUpdater.on("update-downloaded", (i) => {
+      downloaded = true;
+      set({ status: "ready", version: i.version });
+    });
     autoUpdater.on("update-not-available", () => set({ status: "latest" }));
-    autoUpdater.on("error", (e) => set({ status: "error", error: String(e?.message || e).slice(0, 200) }));
+    autoUpdater.on("error", (e) => (downloaded ? set({ status: "ready" }) : set({ status: "error", error: String(e?.message || e).slice(0, 200) })));
   }
 
   async function checkPortable() {
@@ -49,6 +55,7 @@ export function createUpdater({ send, log, enabled }) {
     // a dev run (electron .) has no app-update.yml and nothing to update
     if (!app.isPackaged) return set({ status: "dev" });
     if (portable) return checkPortable();
+    if (downloaded) return set({ status: "ready" });
     autoUpdater.checkForUpdates().catch((e) => set({ status: "error", error: String(e.message).slice(0, 200) }));
   }
 
@@ -59,15 +66,20 @@ export function createUpdater({ send, log, enabled }) {
     check,
     /** Applies automatic checks: soon after start and then every few hours. */
     schedule(on) {
+      const want = !!on && enabled;
+      if (want === armed) return;
+      armed = want;
+      clearTimeout(startTimer);
       clearInterval(timer);
-      timer = null;
-      if (!on || !enabled) return;
-      setTimeout(check, 15_000);
+      startTimer = timer = null;
+      if (!portable) autoUpdater.autoDownload = want; // turning updates off also stops background downloads
+      if (!want) return;
+      startTimer = setTimeout(check, 15_000);
       timer = setInterval(check, CHECK_EVERY);
     },
     install() {
       if (portable) return shell.openExternal(state.url || RELEASES);
-      if (state.status === "ready") autoUpdater.quitAndInstall(false, true);
+      if (downloaded) autoUpdater.quitAndInstall(false, true);
     },
   };
 }

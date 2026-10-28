@@ -77,6 +77,8 @@ async function adoptQueue(v) {
   const ids = localIds();
   const same = sameListIndex(ids, p.index.value, v);
   if (same >= 0) {
+    // this newer adoption supersedes a pending one: its finally won't clear the flag (gen moved on)
+    adopting = false;
     if (same !== p.index.value) p.playAt(same);
     adoptStatus(v);
     return;

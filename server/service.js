@@ -404,22 +404,41 @@ export class Service {
     const cache = (this.lyricsCache ??= new Map());
     const key = `${track?.id}:${this.prefs.lyricsPrefer}`;
     const hit = cache.get(key);
-    if (hit && Date.now() < hit.until) return hit.data;
-    const data = (await getLyrics(this.api, track, { prefer: this.prefs.lyricsPrefer, fetchImpl: this.fetch })) || { source: null, synced: false, lines: [], plain: "" };
-    // an empty answer may be a transient LRCLIB failure: keep it briefly
-    cache.set(key, { data, until: Date.now() + (data.lines.length || data.plain ? 30 * 60000 : 60000) });
+    if (hit && Date.now() < hit.until) return hit.promise;
+    // the in-flight promise is cached too: both views asking at once share one Yandex + LRCLIB round
+    const promise = getLyrics(this.api, track, { prefer: this.prefs.lyricsPrefer, fetchImpl: this.fetch }).then(
+      (d) => d || { source: null, synced: false, lines: [], plain: "" },
+    );
+    const entry = { promise, until: Date.now() + 60000 };
+    cache.set(key, entry);
     if (cache.size > 60) cache.delete(cache.keys().next().value);
-    return data;
+    try {
+      const data = await promise;
+      // an empty answer may be a transient LRCLIB failure, and a late LRCLIB may still bring word timings:
+      // keep those briefly, a complete answer for half an hour
+      const complete = (data.lines.length || data.plain) && !data.wordsPending;
+      entry.until = Date.now() + (complete ? 30 * 60000 : 60000);
+      return data;
+    } catch (e) {
+      if (cache.get(key) === entry) cache.delete(key);
+      throw e;
+    }
   }
 
   async lyricsTranslate({ id, lines } = {}) {
     const cache = (this.lyricsTrCache ??= new Map());
     const key = `${id}:${crypto.createHash("sha1").update(JSON.stringify(lines || [])).digest("hex")}`;
     if (cache.has(key)) return cache.get(key);
-    const data = await translateLines(lines, { target: "ru", fetchImpl: this.fetch });
-    cache.set(key, data);
+    // cache the request itself so two views toggling at once send one translation request
+    const promise = translateLines(lines, { target: "ru", fetchImpl: this.fetch });
+    cache.set(key, promise);
     if (cache.size > 40) cache.delete(cache.keys().next().value);
-    return data;
+    try {
+      return await promise;
+    } catch (e) {
+      if (cache.get(key) === promise) cache.delete(key);
+      throw e;
+    }
   }
 
   async setLike(trackId, liked) {

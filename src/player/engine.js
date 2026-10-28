@@ -95,15 +95,18 @@ function resumeFor(track) {
 
 /** Seek to the resume point once the element knows its duration (setting currentTime earlier is unreliable). */
 function startFrom(el, sec, track) {
-  if (!remembers(track)) return;
+  const episode = remembers(track);
+  if (!episode && !(sec > 0)) return;
+  // a seek by the user while metadata is still loading wins over the stored position
+  const armedAt = seekGen.peek();
   const apply = () => {
     if (el !== audio || srcTrack !== track) return;
-    if (sec > 0 && sec < (el.duration || Infinity) - 1) {
+    if (sec > 0 && sec < (el.duration || Infinity) - 1 && seekGen.peek() === armedAt) {
       el.currentTime = sec;
       position.value = sec;
       if (session) session.lastPos = sec;
     }
-    resumeReady.value = track.id;
+    if (episode) resumeReady.value = track.id;
   };
   if (el.readyState >= 1) apply();
   else el.addEventListener("loadedmetadata", apply, { once: true });
@@ -260,7 +263,9 @@ async function load(i, { autoplay = true, startAt = 0 } = {}) {
     return skipUnplayable(`«${track.title}» недоступен, пропускаю`);
   }
   try {
-    const [r, startAt] = await Promise.all([resolveTrack(track), resumeFor(track)]);
+    // a position handed over from another device (Ynison) wins over an episode's saved resume point
+    const [r, resumeAt] = await Promise.all([resolveTrack(track), startAt > 0 ? Promise.resolve(0) : resumeFor(track)]);
+    const from = startAt > 0 ? startAt : resumeAt;
     if (token !== loadToken) return;
     // while waiting for the link the queue could have been edited (reorder, removal, insertion) — find the track again
     const at = queue.value[index.value] === track ? index.value : queue.value.indexOf(track);
@@ -273,14 +278,12 @@ async function load(i, { autoplay = true, startAt = 0 } = {}) {
     stream.value = r.stream;
     audio.src = r.stream.url;
     // continuing from another device's position (Ynison): the element applies it once metadata arrives
-    if (startAt > 0) {
-      audio.currentTime = startAt;
-      position.value = startAt;
-    }
+    // shown right away; the element itself is positioned by startFrom once metadata arrives
+    if (from > 0) position.value = from;
     srcTrack = queue.value[at];
     applyVolume();
     afterStart(at);
-    startFrom(audio, startAt, srcTrack);
+    startFrom(audio, from, srcTrack);
     if (autoplay) await audio.play().catch(() => {});
   } catch (e) {
     if (token !== loadToken) return;

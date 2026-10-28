@@ -1298,7 +1298,7 @@ h3 {
   position: relative;
   display: grid;
   /* the extras take what they need, the track info gets the rest */
-  grid-template-columns: minmax(300px, 1fr) minmax(220px, 400px) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 400px) max-content;
   align-items: center;
   gap: 1rem;
   padding: 0 0.75rem 0 0.5rem;
@@ -2611,6 +2611,7 @@ kbd {
   .sidebar:not(.is-collapsed) .pin-text,
   .sidebar:not(.is-collapsed) .pin-x,
   .sidebar:not(.is-collapsed) .sb-hint,
+  .sidebar:not(.is-collapsed) .sb-update span,
   .sidebar:not(.is-collapsed) .sb-user > .icon {
     display: none;
   }

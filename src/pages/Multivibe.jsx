@@ -109,7 +109,8 @@ function InviteCard({ onChanged }) {
   };
   // the owner learns that the invite was accepted only by asking again: poll while the draft is on screen
   useEffect(() => {
-    if (!room || room.status !== "DRAFT") return;
+    // also while accepted but not playable yet: Yandex may report ENABLED before the shared seeds exist
+    if (!room || !(room.status === "DRAFT" || (room.status === "ENABLED" && !room.playable))) return;
     const id = setInterval(() => {
       if (document.hidden) return;
       api
@@ -123,7 +124,7 @@ function InviteCard({ onChanged }) {
         .catch(() => {});
     }, POLL_MS);
     return () => clearInterval(id);
-  }, [room?.id, room?.status]);
+  }, [room?.id, room?.status, room?.playable]);
   return (
     <div class="mv-card">
       <h2>Пригласить</h2>

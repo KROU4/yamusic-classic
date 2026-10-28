@@ -3,7 +3,8 @@
 // and this subset never executes tags or expands aliases (anchors/aliases stay plain text).
 // Throws on input it cannot make sense of: callers treat that as "no word sync" and fall back.
 
-const MAX_SIZE = 1024 * 1024; // a Lyricsfile is a few KB; anything bigger is not one
+const MAX_SIZE = 512 * 1024; // a Lyricsfile is a few KB; anything bigger is not one
+const MAX_ROW = 4096; // keeps the key regex and per-row work bounded on hostile input
 
 export function parseYaml(src) {
   if (typeof src !== "string") throw new Error("yaml: not a string");
@@ -12,6 +13,7 @@ export function parseYaml(src) {
   for (const raw of src.replace(/^﻿/, "").split(/\r?\n/)) {
     if (/^(---|\.\.\.)(\s|$)/.test(raw) || /^%/.test(raw)) continue; // document markers, directives
     if (/^\s*\t/.test(raw) && raw.trim()) throw new Error("yaml: tab indentation");
+    if (raw.length > MAX_ROW) throw new Error("yaml: row too long");
     const indent = raw.length - raw.trimStart().length;
     rows.push({ indent, text: raw.slice(indent), raw });
   }
@@ -103,8 +105,15 @@ function inlineValue(st, text, ownerIndent) {
   if (/^[|>]/.test(text)) return blockScalar(st, text, ownerIndent);
   if (text[0] === "{" || text[0] === "[") {
     // flow collections may span rows: gather until brackets balance
-    let src = text;
-    while (!flowBalanced(src) && st.i < st.rows.length) src += " " + st.rows[st.i++].text;
+    const feed = flowFeeder();
+    const parts = [text];
+    let ok = feed(text);
+    while (!ok && st.i < st.rows.length) {
+      const piece = " " + st.rows[st.i++].text;
+      parts.push(piece);
+      ok = feed(piece);
+    }
+    const src = parts.join("");
     const p = { s: src, i: 0 };
     const v = parseFlow(p);
     const tail = src.slice(p.i).trim();
@@ -116,14 +125,22 @@ function inlineValue(st, text, ownerIndent) {
 
 function scalarWithContinuation(st, text, ownerIndent) {
   if (text[0] === '"' || text[0] === "'") {
-    let src = text;
-    while (!quotedClosed(src) && st.i < st.rows.length) {
+    // rows are fed to a state machine one by one and joined once: rescanning (or indexing into)
+    // a string that grows by += per row would be quadratic on a hostile multi-row string
+    const q = text[0];
+    const scan = quoteFeeder(q);
+    const parts = [text];
+    let rel = scan.feed(text.slice(1));
+    while (rel < 0 && st.i < st.rows.length) {
       const r = st.rows[st.i++];
-      src += r.text ? " " + r.text : "\n";
+      const piece = r.text ? " " + r.text : "\n";
+      parts.push(piece);
+      rel = scan.feed(piece);
     }
-    const q = src[0];
-    const end = closingQuote(src);
-    if (end < 0) throw new Error("yaml: unterminated string");
+    if (rel < 0) rel = scan.flush();
+    if (rel < 0) throw new Error("yaml: unterminated string");
+    const src = parts.join("");
+    const end = rel + 1; // positions are counted from just after the opening quote
     const body = src.slice(1, end).replace(/ ?\n ?/g, "\n");
     return q === '"' ? unescapeDouble(body) : body.replace(/''/g, "'");
   }
@@ -189,9 +206,10 @@ function plainScalar(s) {
   return t;
 }
 
-function closingQuote(src) {
-  const q = src[0];
-  for (let k = 1; k < src.length; k++) {
+/** Index of the quote closing the string that opens at src[start], or -1; scanning may resume at `from`. */
+function closingQuote(src, start = 0, from = start + 1) {
+  const q = src[start];
+  for (let k = from; k < src.length; k++) {
     if (q === '"' && src[k] === "\\") k++;
     else if (src[k] === q) {
       if (q === "'" && src[k + 1] === "'") k++;
@@ -200,8 +218,6 @@ function closingQuote(src) {
   }
   return -1;
 }
-
-const quotedClosed = (src) => closingQuote(src) >= 0;
 
 const ESC = { n: "\n", t: "\t", r: "\r", "0": "\0", '"': '"', "\\": "\\", "/": "/", " ": " ", b: "\b", f: "\f", e: "\x1b", N: "\x85", _: "\xa0" };
 
@@ -212,18 +228,74 @@ function unescapeDouble(s) {
   });
 }
 
-function flowBalanced(src) {
+/**
+ * Closing-quote finder fed chunk by chunk (the text after the opening quote). feed() returns the
+ * position of the closing quote counted from the start of the fed stream, or -1; flush() settles a
+ * trailing single quote that could still have been the first half of ''.
+ */
+function quoteFeeder(q) {
+  let pos = 0;
+  let esc = false;
+  let pend = -1;
+  return {
+    feed(chunk) {
+      for (let i = 0; i < chunk.length; i++, pos++) {
+        const c = chunk[i];
+        if (pend >= 0) {
+          if (c === "'") {
+            pend = -1; // '' is an escaped quote
+            continue;
+          }
+          return pend;
+        }
+        if (q === '"') {
+          if (esc) esc = false;
+          else if (c === "\\") esc = true;
+          else if (c === '"') return pos;
+        } else if (c === "'") pend = pos;
+      }
+      // rows are joined with a separator, so a quote ending a row can't be the first half of ''
+      return pend;
+    },
+    flush: () => pend,
+  };
+}
+
+/** Bracket balance of a flow collection, fed row by row without rescanning; quotes are respected. */
+function flowFeeder() {
   let depth = 0;
-  for (let k = 0; k < src.length; k++) {
-    const c = src[k];
-    if (c === '"' || c === "'") {
-      const end = closingQuote(src.slice(k));
-      if (end < 0) return false;
-      k += end;
-    } else if (c === "{" || c === "[") depth++;
-    else if (c === "}" || c === "]") depth--;
-  }
-  return depth <= 0;
+  let q = null;
+  let esc = false;
+  let pend = false;
+  return (chunk) => {
+    for (let i = 0; i < chunk.length; i++) {
+      const c = chunk[i];
+      if (pend) {
+        pend = false;
+        if (c === "'") continue; // '' inside a single-quoted string
+        q = null; // the previous ' closed the string: handle c as plain flow text below
+      }
+      if (q === '"') {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') q = null;
+        continue;
+      }
+      if (q === "'") {
+        if (c === "'") pend = true;
+        continue;
+      }
+      if (c === '"' || c === "'") q = c;
+      else if (c === "{" || c === "[") depth++;
+      else if (c === "}" || c === "]") depth--;
+    }
+    // a ' ending the row closed its string (rows are joined with a separator, never another ')
+    if (pend) {
+      pend = false;
+      q = null;
+    }
+    return q === null && depth <= 0;
+  };
 }
 
 function parseFlow(p) {
@@ -276,11 +348,10 @@ function ws(p) {
 function flowScalar(p, isKey) {
   const c = p.s[p.i];
   if (c === '"' || c === "'") {
-    const rest = p.s.slice(p.i);
-    const end = closingQuote(rest);
+    const end = closingQuote(p.s, p.i);
     if (end < 0) throw new Error("yaml: unterminated string");
-    p.i += end + 1;
-    const body = rest.slice(1, end);
+    const body = p.s.slice(p.i + 1, end);
+    p.i = end + 1;
     return c === '"' ? unescapeDouble(body) : body.replace(/''/g, "'");
   }
   const start = p.i;

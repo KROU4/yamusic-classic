@@ -116,6 +116,33 @@ describe("media proxy", () => {
     }
   });
 
+  it("aborts the CDN request when the player drops the range before it answers", async () => {
+    let aborted = false;
+    const slow = (url, init) =>
+      new Promise((resolve, reject) => {
+        const t = setTimeout(() => resolve(new Response(ENC.subarray(0, 100), { status: 206, headers: { "content-range": `bytes 0-99/${ENC.length}` } })), 400);
+        init.signal?.addEventListener("abort", () => {
+          aborted = true;
+          clearTimeout(t);
+          reject(new Error("aborted"));
+        });
+      });
+    const media = new MediaRegistry({ fetchImpl: slow });
+    const link = media.register({ kind: "enc", url: "https://cdn/x", key: KEY.toString("hex"), mime: "audio/mp4" });
+    const srv = await serve(media);
+    try {
+      const ctl = new AbortController();
+      const p = fetch(`http://127.0.0.1:${srv.address().port}${link}`, { headers: { Range: "bytes=0-99" }, signal: ctl.signal }).catch(() => null);
+      await new Promise((r) => setTimeout(r, 100));
+      ctl.abort();
+      await p;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(aborted).toBe(true);
+    } finally {
+      srv.close();
+    }
+  });
+
   it("accepts only audio extensions for replacements", () => {
     expect(audioMime("C:/music/song.FLAC")).toBe("audio/flac");
     expect(audioMime("C:/x/evil.exe")).toBe(null);

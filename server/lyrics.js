@@ -126,8 +126,9 @@ export function withWords(yandex, rec, durationSec) {
   return shape("lrclib", null, rec.plainLyrics, file.lines);
 }
 
+const LATE = Symbol("late");
 const withBudget = (promise, ms) =>
-  Promise.race([promise, new Promise((r) => setTimeout(() => r(null), ms))]).catch(() => null);
+  Promise.race([promise, new Promise((r) => setTimeout(() => r(LATE), ms))]).catch(() => null);
 
 /**
  * @param api YandexMusic
@@ -151,6 +152,8 @@ export async function getLyrics(api, track, { prefer = "auto", fetchImpl = globa
   if (yandex && yandex.synced && !censored && prefer === "auto") {
     // a slow LRCLIB must not hold the lyrics back: past the budget Yandex lines are shown without words
     const rec = await withBudget(exactP, wordBudgetMs);
+    // LRCLIB was late: words may still exist — the caller keeps this result only briefly
+    if (rec === LATE) return { ...yandex, censored, wordsPending: true };
     return { ...withWords(yandex, rec, track.durationMs / 1000), censored };
   }
 

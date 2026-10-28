@@ -249,3 +249,20 @@ describe("translation", () => {
     expect(bad.lines).toEqual({});
   });
 });
+
+describe("yaml-lite worst cases", () => {
+  it("stays linear on hostile multi-row strings and flows", async () => {
+    const { parseYaml } = await import("../server/yaml-lite.js");
+    const t0 = performance.now();
+    for (const src of ['k: "' + "x\n".repeat(60000), "k: [" + "1,\n".repeat(60000), "k: ['" + "a\n".repeat(60000)]) {
+      try {
+        parseYaml(src);
+      } catch {
+        // malformed on purpose: only the time matters
+      }
+    }
+    expect(performance.now() - t0).toBeLessThan(1500);
+    expect(() => parseYaml("k" + " ".repeat(5000) + "x")).toThrow();
+    expect(parseYaml("a: 'it''s'\nb: [\"x\", 'y''z']")).toEqual({ a: "it's", b: ["x", "y'z"] });
+  });
+});
