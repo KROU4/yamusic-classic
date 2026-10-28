@@ -5,6 +5,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const TOKEN_RE = /y0_[A-Za-z0-9_-]{30,}/g;
+const TOKEN_LENGTHS = [53, 58];
 
 /** Каталоги Local Storage официального приложения (и стабильной, и beta-сборки). */
 export function officialStorageDirs(env = process.env) {
@@ -27,10 +28,15 @@ export function extractCandidates(files) {
   for (const file of ordered) {
     const text = file.content.toString("latin1");
     const matches = [...text.matchAll(TOKEN_RE)].map((m) => m[0]).reverse();
-    for (const token of matches) {
-      if (!seen.has(token)) {
-        seen.add(token);
-        out.push(token);
+    for (const match of matches) {
+      // за значением в LevelDB могут сразу идти ASCII-байты следующей записи —
+      // поэтому кроме совпадения целиком пробуем и типичные длины токена
+      const variants = [match, ...TOKEN_LENGTHS.filter((n) => match.length > n).map((n) => match.slice(0, n))];
+      for (const token of variants) {
+        if (!seen.has(token)) {
+          seen.add(token);
+          out.push(token);
+        }
       }
     }
   }
