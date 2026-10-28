@@ -12,27 +12,46 @@ export function setMini(value) {
   bridge?.setMini(value);
 }
 
-// оболочка знает, что играет: кнопки на панели задач, подсказка в трее, Discord
+function snapshot() {
+  const t = p.current.peek();
+  if (!t) return { playing: false };
+  return {
+    playing: p.playing.peek(),
+    id: t.id,
+    title: t.title,
+    artist: artistNames(t),
+    album: t.album?.title || "",
+    albumId: t.albumId,
+    cover: t.cover ? t.cover.replace(/\d+x\d+$/, "400x400") : null,
+    durationSec: Math.round(p.duration.peek() || (t.durationMs || 0) / 1000),
+    positionSec: Math.round(p.position.peek() || 0),
+  };
+}
+
+// оболочка знает, что играет: кнопки на панели задач, подсказка в трее, Discord.
+// Смена трека и пауза уходят сразу; перемотка — с задержкой, чтобы перетаскивание ползунка
+// не засыпало оболочку сообщениями (Discord к тому же ограничивает частоту обновлений статуса)
 let last = "";
+let seekTimer = null;
+let lastSeekGen = p.seekGen.peek();
+
 effect(() => {
-  const t = p.current.value;
-  const playing = p.playing.value;
+  p.current.value;
+  p.playing.value;
+  const seekGen = p.seekGen.value;
   if (!bridge) return;
-  const state = t
-    ? {
-        playing,
-        id: t.id,
-        title: t.title,
-        artist: artistNames(t),
-        album: t.album?.title || "",
-        albumId: t.albumId,
-        cover: t.cover ? t.cover.replace(/\d+x\d+$/, "400x400") : null,
-        durationSec: Math.round(p.duration.peek() || (t.durationMs || 0) / 1000),
-        positionSec: Math.round(p.position.peek() || 0),
-      }
-    : { playing: false };
+  const state = snapshot();
   const key = JSON.stringify({ ...state, positionSec: 0 });
-  if (key === last) return;
-  last = key;
-  bridge.state(state);
+  if (key !== last) {
+    clearTimeout(seekTimer);
+    last = key;
+    lastSeekGen = seekGen;
+    bridge.state(state);
+    return;
+  }
+  if (seekGen !== lastSeekGen) {
+    lastSeekGen = seekGen;
+    clearTimeout(seekTimer);
+    seekTimer = setTimeout(() => bridge.state(snapshot()), 700);
+  }
 });

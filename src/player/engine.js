@@ -42,6 +42,8 @@ export const authError = signal(false);
 export const audioConfig = signal({ crossfade: LS.get("ymc-crossfade", 0), normalize: LS.get("ymc-normalize", false) });
 // Таймер сна: null | { mode: "time", at } | { mode: "track" }
 export const sleepTimer = signal(null);
+// Счётчик перемоток: оболочка (Discord, трей) переотправляет состояние после seek
+export const seekGen = signal(0);
 
 // Лайки, поставленные в этой сессии, поверх значений из ответов API
 export const likeOverrides = signal(new Map());
@@ -54,6 +56,11 @@ const RESOLVE_TTL = 4 * 60 * 1000;
 const TARGET_LUFS = -14; // ориентир громкости стримингов
 let session = null; // учёт текущего прослушивания
 let loadToken = 0;
+// трек, которому принадлежит src текущего элемента: «Играть» на паузе возобновляет элемент,
+// только если это действительно текущий трек (иначе — загрузить текущий заново)
+let srcTrack = null;
+// Поколение намерений пользователя: растёт только от его действий, не от автоперехода и кроссфейда
+let intentGen = 0;
 let waveFetching = null;
 let fade = null; // активный кроссфейд: { old, oldTrack, timer }
 let fadeMul = 1; // множитель громкости входящего трека во время кроссфейда
@@ -191,6 +198,8 @@ async function load(i, { autoplay = true } = {}) {
     return;
   }
   const token = ++loadToken;
+  // старый элемент глушим сразу (src оставляем): иначе его ended/timeupdate сработают уже с новым индексом
+  audio.pause();
   batch(() => {
     index.value = i;
     loading.value = true;
@@ -204,11 +213,19 @@ async function load(i, { autoplay = true } = {}) {
   try {
     const r = await resolveTrack(track);
     if (token !== loadToken) return;
-    applyResolved(i, r, track);
+    // пока ждали ссылку, очередь могли поправить (перестановка, удаление, вставка) — ищем трек заново
+    const at = queue.value[index.value] === track ? index.value : queue.value.indexOf(track);
+    if (at < 0) {
+      loading.value = false;
+      return;
+    }
+    if (at !== index.value) index.value = at;
+    applyResolved(at, r, track);
     stream.value = r.stream;
     audio.src = r.stream.url;
+    srcTrack = queue.value[at];
     applyVolume();
-    afterStart(i);
+    afterStart(at);
     if (autoplay) await audio.play().catch(() => {});
   } catch (e) {
     if (token !== loadToken) return;
@@ -248,6 +265,7 @@ function startCrossfade() {
   applyResolved(i, entry, nextTrack);
   stream.value = entry.stream;
   audio = incoming;
+  srcTrack = queue.value[i];
   fadeMul = 0;
   applyVolume();
   afterStart(i);
@@ -293,6 +311,7 @@ let queueGen = 0;
 export function playList(tracks, startIndex = 0, ctx = {}) {
   finishSession("skip");
   const { list, start } = order(tracks.filter(Boolean), startIndex);
+  intentGen++;
   queueGen++;
   skipStreak = 0;
   batch(() => {
@@ -304,11 +323,14 @@ export function playList(tracks, startIndex = 0, ctx = {}) {
 
 /** Запустить волну (по умолчанию «Моя волна»). */
 export async function playWave({ stationId = "user:onyourwave", settings, title = "Моя волна" } = {}) {
-  const token = ++loadToken;
+  // loadToken — чтобы отменить загрузку, которая уже идёт; сверяемся же с намерениями пользователя:
+  // автопереход или кроссфейд во время запроса не должен отменять клик по волне
+  ++loadToken;
+  const gen = ++intentGen;
   loading.value = true;
   try {
     const r = await api.post("/wave/start", { stationId, settings });
-    if (token !== loadToken) return; // пока ждали, пользователь включил что-то другое
+    if (gen !== intentGen) return; // пока ждали, пользователь включил что-то другое
     if (!r.tracks?.length) {
       loading.value = false;
       toast("Волна ничего не нашла — ослабьте фильтры анти-повтора в настройках");
@@ -325,7 +347,7 @@ export async function playWave({ stationId = "user:onyourwave", settings, title 
     });
     return load(0);
   } catch (e) {
-    if (token !== loadToken) return;
+    if (gen !== intentGen) return;
     loading.value = false;
     if (e.status === 401) authError.value = true;
     toast(`Волна не запустилась: ${e.message}`);
@@ -356,6 +378,7 @@ function maybeExtendWave() {
 /** auto — трек сменился сам; reason: "error" — пропуск недоступного/сломанного трека, а не «доиграл». */
 export async function next({ auto = false, reason } = {}) {
   const finished = auto && reason !== "error";
+  if (!auto) intentGen++;
   finishSession(finished ? "ended" : "skip");
   // таймер «до конца трека»: доиграли — останавливаемся
   if (finished && sleepTimer.value?.mode === "track") {
@@ -367,8 +390,14 @@ export async function next({ auto = false, reason } = {}) {
   }
   const i = index.value;
   if (i < queue.value.length - 1) return load(i + 1);
+  // волна, восстановленная после перезапуска (сохранён один трек): очередь кончилась — новая сессия волны, а не повтор трека
+  if (context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
   if (context.value?.type === "wave") {
+    const gen = queueGen;
+    const ig = intentGen;
     await maybeExtendWave();
+    // пока ждали треки, пользователь включил другую очередь или другой трек в этой
+    if (gen !== queueGen || ig !== intentGen || index.value !== i) return;
     if (i < queue.value.length - 1) return load(i + 1);
   }
   if (repeat.value === "all" && queue.value.length) return load(0);
@@ -382,12 +411,14 @@ export function prev() {
     audio.currentTime = 0;
     return;
   }
+  intentGen++;
   finishSession("skip");
   load(index.value - 1);
 }
 
 export function playAt(i) {
   if (i === index.value) return toggle();
+  intentGen++;
   finishSession("skip");
   load(i);
 }
@@ -396,9 +427,16 @@ export function toggle() {
   if (!current.value) return;
   // после перезапуска приложения волна продолжается новой сессией, а не одним сохранённым треком
   if (!audio.src && context.value?.resumeWave) return playWave({ stationId: context.value.stationId, title: context.value.title });
-  if (!audio.src) return load(index.value);
+  if (!audio.src || (audio.paused && srcTrack !== current.value)) {
+    // элемент пуст или звучал другой трек (загрузка ещё идёт, была перебита или сорвалась) —
+    // включаем текущий трек заново, а не возобновляем чужой поток
+    intentGen++;
+    return load(index.value);
+  }
   if (audio.paused) {
     cancelSleepFade(); // «Играть» во время затухания таймера сна — значит, спать передумали
+    // очередь доиграла (или остановил таймер «до конца трека») — новое прослушивание тоже идёт в отчёт
+    if (!session && current.value) startSession(current.value);
     audio.play().catch(() => {});
   } else {
     cancelFade();
@@ -411,6 +449,10 @@ export function seek(sec) {
   cancelFade();
   if (session) session.lastPos = sec;
   audio.currentTime = Math.max(0, Math.min(sec, audio.duration || duration.value));
+  batch(() => {
+    position.value = audio.currentTime;
+    seekGen.value++;
+  });
 }
 
 export function setVolume(v) {
@@ -487,6 +529,7 @@ export function setSleepTimer(minutes) {
       if (k >= 1) {
         clearInterval(sleepFadeTimer);
         sleepFadeTimer = null;
+        cancelFade(); // кроссфейд не должен пережить затухание и зазвучать на полную после сброса sleepMul
         audio.pause();
         sleepMul = 1;
         applyVolume();
@@ -500,15 +543,19 @@ export function enqueueNext(tracks) {
   const list = [...queue.value];
   list.splice(index.value + 1, 0, ...tracks);
   queue.value = list;
-  if (index.value < 0) load(0);
-  else persistQueue();
+  if (index.value < 0) {
+    intentGen++; // пустая очередь — это запуск по действию пользователя
+    load(0);
+  } else persistQueue();
   toast(tracks.length > 1 ? "Добавлено в очередь" : `«${tracks[0].title}» будет следующим`);
 }
 
 export function enqueueEnd(tracks) {
   queue.value = [...queue.value, ...tracks];
-  if (index.value < 0) load(0);
-  else persistQueue();
+  if (index.value < 0) {
+    intentGen++; // пустая очередь — это запуск по действию пользователя
+    load(0);
+  } else persistQueue();
   toast(tracks.length > 1 ? `Добавлено в конец очереди: ${tracks.length}` : `«${tracks[0].title}» — в конце очереди`);
 }
 
@@ -613,8 +660,8 @@ function attachListeners(el) {
       resolveTrack(nxt).catch(() => prefetchFailedAt.set(nxt.id, Date.now()));
     }
     if (context.value?.type === "wave" && dur - t < 30) maybeExtendWave();
-    // кроссфейд: не для повтора трека, не для таймера «до конца трека», не для коротких треков
-    if (xf > 0 && !fade && !el.paused && repeat.value !== "one" && sleepTimer.value?.mode !== "track" && dur > xf * 3 && dur - t <= xf) startCrossfade();
+    // кроссфейд: не для повтора трека, не для таймера «до конца трека», не во время затухания таймера сна, не для коротких треков
+    if (xf > 0 && !fade && !sleepFadeTimer && !el.paused && repeat.value !== "one" && sleepTimer.value?.mode !== "track" && dur > xf * 3 && dur - t <= xf) startCrossfade();
     if ("mediaSession" in navigator && Number.isFinite(el.duration)) {
       try {
         navigator.mediaSession.setPositionState({ duration: el.duration, position: Math.min(t, el.duration), playbackRate: 1 });

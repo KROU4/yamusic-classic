@@ -5,7 +5,7 @@ import { nowPlayingOpen } from "../lib/ui.js";
 import { Progress, Volume } from "./PlayerBar.jsx";
 import { Lyrics } from "./SidePanels.jsx";
 import { ExplicitBadge, Artists } from "./TrackList.jsx";
-import { openTrackMenu } from "./ContextMenu.jsx";
+import { openTrackMenu, menu } from "./ContextMenu.jsx";
 import { seconds } from "../lib/format.js";
 import * as p from "../player/engine.js";
 
@@ -15,9 +15,23 @@ export function NowPlaying() {
   const open = nowPlayingOpen.value;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === "Escape" && (nowPlayingOpen.value = false);
+    const hide = () => (nowPlayingOpen.value = false);
+    // Esc при открытом контекстном меню закрывает только меню (наш обработчик срабатывает раньше, menu ещё задан)
+    const onKey = (e) => {
+      if (e.key !== "Escape" || menu.value) return;
+      hide();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // переход изнутри (исполнитель, «Перейти к альбому») — сворачиваемся, иначе новая страница скрыта под нами
+    window.addEventListener("hashchange", hide);
+    // клик по ссылке внутри (исполнитель) сворачивает сразу, даже если адрес совпадает с текущим
+    const onClick = (e) => e.target.closest?.(".np a[href^=\"#\"]") && hide();
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("hashchange", hide);
+      document.removeEventListener("click", onClick, true);
+    };
   }, [open]);
   const t = p.current.value;
   if (!open || !t) return null;

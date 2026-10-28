@@ -167,3 +167,97 @@ describe("нормализация", () => {
     expect(settingsSeeds({})).toEqual([]);
   });
 });
+
+describe("сервис", () => {
+  // сервис с поддельным API: сеть не трогаем, проверяем только прикладную логику
+  async function makeService() {
+    const fs = await import("node:fs");
+    const os = await import("node:os");
+    const path = await import("node:path");
+    const { Service } = await import("../server/service.js");
+    const svc = new Service({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), "ymc-svc-")) });
+    svc.account = { account: { uid: 1, login: "t" } };
+    svc.api.uid = 1;
+    svc.api.sessionFeedback = async () => ({});
+    return svc;
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 5));
+
+  it("правки одного плейлиста идут по очереди со свежей ревизией, ошибка не рвёт очередь", async () => {
+    const svc = await makeService();
+    let revision = 1;
+    let count = 0;
+    svc.api.playlist = async () => ({ revision, trackCount: count, tracks: [] });
+    svc.api.changePlaylist = async (uid, kind, rev, diff) => {
+      await tick();
+      if (rev !== revision) throw new Error("stale revision");
+      if (diff[0].tracks[0].id === "bad") throw new Error("boom");
+      revision++;
+      count += diff[0].tracks.length;
+      return { kind, revision, trackCount: count };
+    };
+    const results = await Promise.allSettled([
+      svc.addToPlaylist(5, [{ id: "1" }]),
+      svc.addToPlaylist(5, [{ id: "bad" }]),
+      svc.addToPlaylist(5, [{ id: "2" }]),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
+    expect(results[1].reason.message).toBe("boom");
+    expect(count).toBe(2);
+    expect(svc.playlistLocks.size).toBe(0);
+  });
+
+  it("создание плейлиста не считается неудачей, если не добавились треки", async () => {
+    const svc = await makeService();
+    svc.api.createPlaylist = async (uid, title) => ({ kind: 7, title, uid });
+    svc.api.playlist = async () => ({ revision: 1, trackCount: 0 });
+    svc.api.changePlaylist = async () => {
+      throw new Error("нет связи");
+    };
+    const r = await svc.createPlaylist("Новый", [{ id: "1" }]);
+    expect(r.playlist.kind).toBe(7);
+    expect(r.addError).toBe("нет связи");
+    expect((await svc.createPlaylist("Пустой")).addError).toBeNull();
+  });
+
+  it("статистика оставляет топ-треки, которые не удалось догрузить", async () => {
+    const svc = await makeService();
+    svc.playlog.add({ id: "9", title: "Песня", artists: [{ id: 1, name: "A" }], albumId: "3", cover: null }, 120);
+    svc.api.tracks = async () => {
+      throw new Error("offline");
+    };
+    const s = await svc.stats(7);
+    expect(s.topTracks).toHaveLength(1);
+    expect(s.topTracks[0]).toMatchObject({ id: "9", albumId: "3", title: "Песня", durationMs: 0, available: true, plays: 1, seconds: 120 });
+  });
+
+  it("сбой дозаполнения не роняет запуск волны", async () => {
+    const svc = await makeService();
+    svc.api.sessionNew = async () => ({ radioSessionId: "s1", batchId: "b1", sequence: [] });
+    svc.api.sessionTracks = async () => {
+      throw new Error("timeout");
+    };
+    const r = await svc.wave.start({ stationId: "genre:rock" });
+    expect(r.sessionId).toBe("s1");
+    expect(svc.wave.session.stationId).toBe("genre:rock");
+  });
+
+  it("устаревший запуск станции не забирает буфер более новой", async () => {
+    const svc = await makeService();
+    let n = 0;
+    svc.api.sessionNew = async () => ({ radioSessionId: `s${++n}`, batchId: "b", sequence: [] });
+    let release;
+    const gate = new Promise((r) => (release = r));
+    svc.api.sessionTracks = async (id) => {
+      if (id === "s1") await gate;
+      return { sequence: [] };
+    };
+    const first = svc.waveStart({ stationId: "genre:rock" });
+    await tick();
+    const second = await svc.waveStart({ stationId: "genre:jazz" });
+    release();
+    await expect(first).rejects.toMatchObject({ status: 409 });
+    expect(second.sessionId).toBe("s2");
+    expect(svc.wave.session.stationId).toBe("genre:jazz");
+  });
+});

@@ -25,6 +25,9 @@ function hours(sec) {
   return h ? `${h} ч ${m} мин` : `${m} мин`;
 }
 
+// ключ дня «ГГГГ-ММ-ДД» — местный полдень: new Date("ГГГГ-ММ-ДД") парсится как полночь UTC и западнее UTC даёт вчерашний день
+const localDay = (day) => new Date(`${day}T12:00:00`);
+
 function Tile({ value, label }) {
   return (
     <div class="tile">
@@ -50,16 +53,25 @@ function Bars({ items, labelOf, titleOf, highlight }) {
 
 export function StatsPage() {
   const [days, setDays] = useState(30);
+  // версия в адресе — перечитать статистику после очистки без перезагрузки окна (иначе встанет музыка)
+  const [version, setVersion] = useState(0);
   const tz = new Date().getTimezoneOffset();
-  const path = `/stats?days=${days}&tz=${tz}`;
+  // IANA-зона точнее смещения: учитывает переходы на летнее время внутри периода
+  const zone = encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "");
+  const path = `/stats?days=${days}&tz=${tz}&zone=${zone}&v=${version}`;
   const { data, loading, error } = useLoad(path, 30000);
 
   const clear = async () => {
     if (!confirm("Удалить всю локальную статистику прослушиваний? Это нельзя отменить.")) return;
-    await api.post("/stats/clear");
+    try {
+      await api.post("/stats/clear");
+    } catch (e) {
+      toast(`Не удалось очистить: ${e.message}`);
+      return;
+    }
     dropCache("/stats");
     toast("Статистика очищена");
-    location.reload();
+    setVersion((v) => v + 1);
   };
 
   return (
@@ -99,8 +111,8 @@ export function StatsPage() {
             <Section title="По дням">
               <Bars
                 items={(days > 31 ? data.byDay.slice(-31) : data.byDay).map((d) => ({ v: d.seconds, day: d.day }))}
-                labelOf={(x, i, arr) => (days <= 7 ? new Date(x.day).toLocaleDateString("ru-RU", { weekday: "short" }) : i % 5 === 0 ? x.day.slice(8) : "")}
-                titleOf={(x) => `${new Date(x.day).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}: ${hours(x.v)}`}
+                labelOf={(x, i) => (days <= 7 ? localDay(x.day).toLocaleDateString("ru-RU", { weekday: "short" }) : i % 5 === 0 ? x.day.slice(8) : "")}
+                titleOf={(x) => `${localDay(x.day).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}: ${hours(x.v)}`}
               />
             </Section>
             <Section title="По времени суток">

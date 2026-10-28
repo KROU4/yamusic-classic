@@ -1,7 +1,7 @@
 // Оболочка Electron: поднимает локальный бэкенд и открывает окно с интерфейсом.
 // Плюс интеграция с Windows: кнопки на миниатюре в панели задач, трей, мини-плеер,
 // автозапуск, глобальные горячие клавиши, статус в Discord.
-import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session, ipcMain, globalShortcut } from "electron";
+import { app, BrowserWindow, Tray, Menu, shell, nativeImage, screen, session, ipcMain, globalShortcut, dialog } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -32,6 +32,7 @@ let tray = null;
 let backend = null;
 let quitting = false;
 let miniMode = false;
+let pendingMaximize = false; // окно стартовало в трее, а развернуть его надо при первом показе
 let normalBounds = null; // размер окна до перехода в мини-плеер
 let playerState = { playing: false };
 const discord = new DiscordPresence({ log });
@@ -56,7 +57,8 @@ function loadBounds() {
 function saveBounds() {
   if (!win) return;
   // в мини-режиме запоминаем обычный размер, а не крошечное окно
-  const b = miniMode && normalBounds ? normalBounds : { ...win.getNormalBounds(), maximized: win.isMaximized() };
+  // окно, запущенное в трей «развёрнутым», ещё не развёрнуто — но таким его и надо сохранить
+  const b = miniMode && normalBounds ? normalBounds : { ...win.getNormalBounds(), maximized: win.isMaximized() || pendingMaximize };
   try {
     fs.writeFileSync(boundsFile, JSON.stringify(b));
   } catch {
@@ -138,7 +140,8 @@ function createTray() {
   if (icon.isEmpty()) return;
   tray = new Tray(icon.resize({ width: 16, height: 16 }));
   updateTray();
-  tray.on("click", () => (win?.isVisible() && win.isFocused() ? win.hide() : showWindow()));
+  // по видимости, а не по фокусу: клик по трею в Windows сам забирает фокус у окна
+  tray.on("click", () => (win?.isVisible() && !win.isMinimized() ? win.hide() : showWindow()));
 }
 
 // ---------- мини-плеер ----------
@@ -200,7 +203,12 @@ function updateDiscord() {
 // ---------- настройки оболочки ----------
 function applyPrefs(p) {
   // автозапуск регистрируем только у собранного приложения, иначе в автозагрузку попал бы electron.exe разработчика
-  if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"] });
+  // портативная сборка распаковывается во временную папку — в автозагрузку пишем сам portable-exe
+  // (те же path/args и при выключении, иначе Windows не найдёт и не удалит нужную запись)
+  if (app.isPackaged) {
+    const exe = process.env.PORTABLE_EXECUTABLE_FILE;
+    app.setLoginItemSettings({ openAtLogin: !!p.autostart, args: ["--hidden"], ...(exe ? { path: exe } : {}) });
+  }
   applyHotkeys(!!p.globalHotkeys);
   updateDiscord();
 }
@@ -259,7 +267,8 @@ function createWindow(url, key) {
       backgroundThrottling: false, // таймеры плеера не должны засыпать в свёрнутом окне
     },
   });
-  if (b.maximized) win.maximize();
+  // maximize() у скрытого окна сразу его показывает — разворачиваем только в ready-to-show
+  const startMaximized = !!b.maximized;
 
   const origin = new URL(url).origin;
   // всё, что ведёт наружу, открываем в системном браузере
@@ -277,7 +286,16 @@ function createWindow(url, key) {
   win.once("ready-to-show", () => {
     // запуск из автозагрузки с «Запускать свёрнутым» — окно остаётся в трее (только если трей есть, иначе окно недостижимо)
     const stayHidden = launchedHidden && prefs().startMinimized && !!tray && !process.env.YMC_SHOTS;
-    if (!stayHidden) win.show();
+    if (!stayHidden) {
+      if (startMaximized) win.maximize(); // maximize заодно и показывает окно
+      else win.show();
+    } else if (startMaximized) {
+      pendingMaximize = true;
+      win.once("show", () => {
+        pendingMaximize = false;
+        win.maximize();
+      });
+    }
     updateThumbar();
     log(`окно ${stayHidden ? "готово (в трее)" : "показано"} через ${Date.now() - t0} мс после старта`);
     if (process.env.YMC_SHOTS) runShots(process.env.YMC_SHOTS);
@@ -349,12 +367,19 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   // музыкальному клиенту не нужны ни камера, ни микрофон, ни уведомления сайтов
   session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
-  backend = await startBackend();
-  log(`бэкенд готов через ${Date.now() - t0} мс`);
-  createWindow(backend.url, backend.srv.key);
-  createTray();
-  applyPrefs(prefs());
-  backend.svc.onPrefs((next) => applyPrefs(next));
+  try {
+    backend = await startBackend();
+    log(`бэкенд готов через ${Date.now() - t0} мс`);
+    createWindow(backend.url, backend.srv.key);
+    createTray();
+    applyPrefs(prefs());
+    backend.svc.onPrefs((next) => applyPrefs(next));
+  } catch (e) {
+    // иначе невидимый процесс без окна держал бы блокировку единственного экземпляра
+    log("запуск не удался:", e.stack || e.message);
+    dialog.showErrorBox("YM Classic", "Не удалось запустить локальный сервер: " + e.message);
+    app.exit(1);
+  }
 });
 
 app.on("before-quit", () => {

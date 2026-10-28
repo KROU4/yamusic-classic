@@ -61,7 +61,10 @@ export class YandexMusic {
       body = text;
     }
     if (!res.ok) {
-      const msg = body?.error?.message || body?.error?.name || `HTTP ${res.status}`;
+      const msg =
+        res.status === 429
+          ? "Яндекс просит подождать: слишком много запросов подряд. Повторите через минуту"
+          : body?.error?.message || body?.error?.name || `HTTP ${res.status}`;
       throw new ApiError(msg, res.status, body);
     }
     return body && typeof body === "object" && "result" in body ? body.result : body;

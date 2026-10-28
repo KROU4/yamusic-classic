@@ -43,7 +43,7 @@ export class WaveManager {
     const r = await api.sessionNew({ seeds, queue, allowExplicit: this.prefs.allowExplicit, aiReduced: this.prefs.aiReduced });
     // пока ждали ответ, пользователь запустил другую станцию — этот запуск устарел
     if (gen !== this.startGen) throw new ApiError("Запуск станции отменён более новым", 409);
-    this.session = {
+    const session = (this.session = {
       id: r.radioSessionId,
       batchId: r.batchId,
       stationId,
@@ -52,13 +52,19 @@ export class WaveManager {
       buffer: [],
       served: new Set(),
       description: r.descriptionSeed?.value || null,
-    };
+    });
     this.stats = { fetched: 0, rejected: {} };
     this.filling = null; // фоновое дозаполнение прежней станции к новой отношения не имеет
     this.absorb(r.sequence);
     this.feedback("radioStarted", null).catch(() => {});
-    await this.fill();
-    return { sessionId: this.session.id, seeds, stationId };
+    // сессия уже новая: сбой дозаполнения не должен ронять запуск, иначе клиент останется на старой волне
+    try {
+      await this.fill();
+    } catch (e) {
+      this.deps.log?.("wave fill failed", e.message);
+    }
+    // id своей сессии, а не текущей: за время fill могла стартовать другая станция
+    return { sessionId: session.id, seeds, stationId };
   }
 
   absorb(sequence = []) {
@@ -105,8 +111,12 @@ export class WaveManager {
   /** Отдаёт следующие треки и в фоне дозаполняет буфер. */
   async next(count = 3) {
     if (!this.session) await this.start();
-    if (this.session.buffer.length < count) await this.fill();
-    const out = this.session.buffer.splice(0, count);
+    const s = this.session;
+    // ошибка дозаполнения не роняет выдачу: отдаём то, что уже есть в буфере
+    if (s.buffer.length < count) await this.fill().catch((e) => this.deps.log?.("wave fill failed", e.message));
+    // пока ждали, запустили другую станцию — её буфер не трогаем
+    if (this.session !== s) throw new ApiError("Запуск станции отменён более новым", 409);
+    const out = s.buffer.splice(0, count);
     this.fill().catch((e) => this.deps.log?.("wave fill failed", e.message));
     return out;
   }

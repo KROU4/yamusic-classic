@@ -55,6 +55,7 @@ export class Service {
       log,
     });
     this.cache = new Map();
+    this.playlistLocks = new Map(); // kind -> хвост цепочки правок этого плейлиста
   }
 
   get prefs() {
@@ -374,7 +375,12 @@ export class Service {
     const s = settings || this.prefs.wave;
     if (!stationId || stationId === "user:onyourwave") this.setPrefs({ wave: s });
     const info = await this.wave.start({ stationId: stationId || "user:onyourwave", settings: s });
+    // пока шёл запуск, могла стартовать другая станция: её буфер этому запросу не отдаём
+    const session = this.wave.session;
+    const stale = () => this.wave.session !== session || session?.id !== info.sessionId;
+    if (stale()) throw new ApiError("Запуск станции отменён более новым", 409);
     const tracks = await this.wave.next(4);
+    if (stale()) throw new ApiError("Запуск станции отменён более новым", 409);
     return { ...info, tracks: this.decorate(tracks), wave: this.wave.info() };
   }
 
@@ -394,15 +400,37 @@ export class Service {
   }
 
   // ---------- статистика ----------
-  async stats(days = 7, tzOffsetMin = 0) {
-    const s = computeStats(this.playlog.entries, { days, tzOffsetMin });
+  async stats(days = 7, tzOffsetMin = 0, timeZone = null) {
+    const s = computeStats(this.playlog.entries, { days, tzOffsetMin, timeZone });
     // топ-треки догружаем целиком, чтобы их можно было сразу включить из статистики
     if (this.account && s.topTracks.length) {
       const full = await this.fullTracks(s.topTracks.map((t) => t.id)).catch(() => []);
       const byId = new Map(this.decorate(full).map((t) => [t.id, t]));
-      s.topTracks = s.topTracks.map((t) => (byId.has(t.id) ? { ...byId.get(t.id), plays: t.plays, seconds: t.seconds } : null)).filter(Boolean);
+      // не догрузилось — оставляем минимальный играбельный трек из журнала, а не теряем его из топа
+      s.topTracks = s.topTracks.map((t) => (byId.has(t.id) ? { ...byId.get(t.id), plays: t.plays, seconds: t.seconds } : this.decorate([Service.logTrack(t)])[0]));
     }
     return s;
+  }
+
+  /** Трек из записи журнала в форме normTrack — когда полные данные получить не удалось. */
+  static logTrack(t) {
+    return {
+      id: t.id,
+      albumId: t.albumId,
+      title: t.title,
+      artists: t.artists,
+      cover: t.cover,
+      durationMs: 0,
+      available: true,
+      explicit: false,
+      clean: false,
+      version: null,
+      album: null,
+      lyrics: { sync: false, text: false },
+      substituted: null,
+      plays: t.plays,
+      seconds: t.seconds,
+    };
   }
 
   // ---------- свои плейлисты ----------
@@ -416,47 +444,78 @@ export class Service {
     this.requireAuth();
     const name = String(title || "").trim().slice(0, 100) || "Новый плейлист";
     const pl = await this.api.createPlaylist(this.api.uid, name);
-    if (tracks.length) await this.addToPlaylist(pl.kind, tracks);
     this.cache.delete("home");
-    return { playlist: normPlaylist(pl) };
+    // плейлист уже создан: ошибку добавления отдаём отдельно, иначе повтор плодит дубликаты
+    let addError = null;
+    if (tracks.length) {
+      try {
+        await this.addToPlaylist(pl.kind, tracks);
+      } catch (e) {
+        addError = e.message;
+        this.log("playlist add failed", e.message);
+      }
+    }
+    return { playlist: normPlaylist(pl), addError };
+  }
+
+  /** Правки одного плейлиста идут строго по очереди: каждая берёт свежую ревизию после предыдущей. */
+  withPlaylistLock(kind, fn) {
+    const key = String(kind);
+    const prev = this.playlistLocks.get(key) || Promise.resolve();
+    const run = prev.then(fn);
+    // ошибка одной правки не рвёт цепочку для следующих
+    const tail = run.catch(() => {});
+    this.playlistLocks.set(key, tail);
+    tail.then(() => {
+      if (this.playlistLocks.get(key) === tail) this.playlistLocks.delete(key);
+    });
+    return run;
   }
 
   async addToPlaylist(kind, tracks) {
     this.requireAuth();
-    const pl = await this.api.playlist(this.api.uid, kind);
     const items = tracks.filter((t) => t?.id).map((t) => ({ id: String(t.id), albumId: t.albumId ? String(t.albumId) : undefined }));
     if (!items.length) throw new ApiError("Нечего добавлять", 400);
-    // новые треки в конец плейлиста, как в классическом клиенте
-    const diff = [{ op: "insert", at: pl.trackCount || 0, tracks: items }];
-    const r = await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
-    return { playlist: normPlaylist(r), added: items.length };
+    return this.withPlaylistLock(kind, async () => {
+      const pl = await this.api.playlist(this.api.uid, kind);
+      // новые треки в конец плейлиста, как в классическом клиенте
+      const diff = [{ op: "insert", at: pl.trackCount || 0, tracks: items }];
+      const r = await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
+      return { playlist: normPlaylist(r), added: items.length };
+    });
   }
 
   async removeFromPlaylist(kind, track, index) {
     this.requireAuth();
-    const pl = await this.api.playlist(this.api.uid, kind);
-    // позицию берём из актуального плейлиста: индекс на экране мог устареть
-    const at = (pl.tracks || []).findIndex((x, i) => String(x.id) === String(track.id) && (index == null || i === index));
-    const pos = at >= 0 ? at : (pl.tracks || []).findIndex((x) => String(x.id) === String(track.id));
-    if (pos < 0) throw new ApiError("Трека уже нет в плейлисте", 404);
-    const entry = pl.tracks[pos];
-    const diff = [{ op: "delete", from: pos, to: pos + 1, tracks: [{ id: String(entry.id), albumId: entry.albumId ? String(entry.albumId) : undefined }] }];
-    await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
-    return { ok: true };
+    return this.withPlaylistLock(kind, async () => {
+      const pl = await this.api.playlist(this.api.uid, kind);
+      // позицию берём из актуального плейлиста: индекс на экране мог устареть
+      const at = (pl.tracks || []).findIndex((x, i) => String(x.id) === String(track.id) && (index == null || i === index));
+      const pos = at >= 0 ? at : (pl.tracks || []).findIndex((x) => String(x.id) === String(track.id));
+      if (pos < 0) throw new ApiError("Трека уже нет в плейлисте", 404);
+      const entry = pl.tracks[pos];
+      const diff = [{ op: "delete", from: pos, to: pos + 1, tracks: [{ id: String(entry.id), albumId: entry.albumId ? String(entry.albumId) : undefined }] }];
+      await this.api.changePlaylist(this.api.uid, kind, pl.revision, diff);
+      return { ok: true };
+    });
   }
 
   async deletePlaylist(kind) {
     this.requireAuth();
-    await this.api.deletePlaylist(this.api.uid, kind);
-    this.cache.delete("home");
-    return { ok: true };
+    return this.withPlaylistLock(kind, async () => {
+      await this.api.deletePlaylist(this.api.uid, kind);
+      this.cache.delete("home");
+      return { ok: true };
+    });
   }
 
   async renamePlaylist(kind, title) {
     this.requireAuth();
     const name = String(title || "").trim().slice(0, 100);
     if (!name) throw new ApiError("Пустое название", 400);
-    const r = await this.api.renamePlaylist(this.api.uid, kind, name);
-    return { playlist: normPlaylist(r) };
+    return this.withPlaylistLock(kind, async () => {
+      const r = await this.api.renamePlaylist(this.api.uid, kind, name);
+      return { playlist: normPlaylist(r) };
+    });
   }
 }

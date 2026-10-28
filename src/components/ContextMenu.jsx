@@ -5,6 +5,7 @@ import { Icon } from "./Icon.jsx";
 import { api, dropCache } from "../lib/api.js";
 import { go } from "../lib/router.js";
 import { toast } from "../lib/toast.js";
+import { nowPlayingOpen } from "../lib/ui.js";
 import * as player from "../player/engine.js";
 
 /** { x, y, track, playlist?: { kind, index, onRemoved } } */
@@ -23,10 +24,21 @@ let menuSeq = 0;
 
 const close = () => (menu.value = null);
 
+// переход из меню сворачивает «Сейчас играет»: адрес может и не измениться (тот же альбом), hashchange тогда не придёт
+const goTo = (path) => {
+  nowPlayingOpen.value = false;
+  go(path);
+};
+
 function PlaylistPicker({ track, onDone }) {
   const [lists, setLists] = useState(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
+  const input = useRef(null);
+  // autoFocus срабатывает не всегда, а без фокуса нажатия уходят в глобальные горячие клавиши
+  useEffect(() => {
+    if (creating) input.current?.focus();
+  }, [creating]);
   useEffect(() => {
     api
       .get("/my/playlists")
@@ -52,7 +64,9 @@ function PlaylistPicker({ track, onDone }) {
     try {
       const r = await api.post("/my/playlists", { title: name || "Новый плейлист", tracks: [track] });
       dropCache("/collection");
-      toast(`Создан плейлист «${r.playlist.title}»`);
+      // плейлист мог создаться, а трек в него — не добавиться (сервер сообщает addError)
+      if (r.addError) toast(`Плейлист «${r.playlist.title}» создан, но трек не добавился: ${r.addError}`);
+      else toast(`Создан плейлист «${r.playlist.title}»`);
     } catch (err) {
       toast(`Не удалось создать: ${err.message}`);
     }
@@ -61,7 +75,7 @@ function PlaylistPicker({ track, onDone }) {
     <div class="menu-sub">
       {creating ? (
         <form onSubmit={create} class="menu-create">
-          <input autoFocus value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="Название плейлиста" maxLength={100} aria-label="Название нового плейлиста" />
+          <input ref={input} autoFocus value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="Название плейлиста" maxLength={100} aria-label="Название нового плейлиста" />
           <button class="btn primary sm" type="submit">
             Создать
           </button>
@@ -94,14 +108,24 @@ function MenuBody({ m }) {
   const [pos, setPos] = useState(null);
   const [sub, setSub] = useState(false);
 
-  // меню не должно вылезать за край окна (пересчёт и при раскрытии подменю)
-  useLayoutEffect(() => {
+  // меню не должно вылезать за край окна: позиция считается от точки открытия по текущему размеру меню
+  const place = () => {
     if (!box.current) return;
     const r = box.current.getBoundingClientRect();
     const x = Math.min(m.x, window.innerWidth - r.width - 8);
     const y = m.y + r.height > window.innerHeight - 8 ? Math.max(8, m.y - r.height) : m.y;
-    setPos({ x: Math.max(8, x), y: Math.max(8, y) });
-  }, [sub]);
+    const next = { x: Math.max(8, x), y: Math.max(8, y) };
+    setPos((p) => (p && p.x === next.x && p.y === next.y ? p : next));
+  };
+  // первый расчёт до отрисовки, чтобы меню не мигнуло не на своём месте
+  useLayoutEffect(place, []);
+  // и при любом изменении размера: раскрыли подменю, догрузился список плейлистов, открылась форма
+  useEffect(() => {
+    if (!box.current || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(place);
+    ro.observe(box.current);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && close();
@@ -175,12 +199,12 @@ function MenuBody({ m }) {
       </button>
       <div class="menu-sep" />
       {t.albumId && (
-        <button class="menu-item" role="menuitem" onClick={act(() => go(`/album/${t.albumId}`))}>
+        <button class="menu-item" role="menuitem" onClick={act(() => goTo(`/album/${t.albumId}`))}>
           <Icon name="album" size={16} /> Перейти к альбому
         </button>
       )}
       {t.artists.slice(0, 3).map((a) => (
-        <button key={a.id} class="menu-item" role="menuitem" onClick={act(() => go(`/artist/${a.id}`))}>
+        <button key={a.id} class="menu-item" role="menuitem" onClick={act(() => goTo(`/artist/${a.id}`))}>
           <Icon name="artist" size={16} /> <span class="menu-label">{a.name}</span>
         </button>
       ))}

@@ -40,6 +40,12 @@ describe("локальный HTTP-сервер", () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": "b".repeat(48) } });
     expect(r.status).toBe(403);
   });
+  it("не-ASCII ключ той же длины в символах — 403, сервер не падает", async () => {
+    const r = await request(port, "/api/me", { headers: { "x-ymc-key": "é".repeat(48) } });
+    expect(r.status).toBe(403);
+    const again = await request(port, "/api/me", { headers: { "x-ymc-key": key } });
+    expect(again.status).toBe(200);
+  });
   it("с ключом — отвечает", async () => {
     const r = await request(port, "/api/me", { headers: { "x-ymc-key": key } });
     expect(r.status).toBe(200);

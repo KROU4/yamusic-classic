@@ -52,6 +52,54 @@ describe("статистика", () => {
     expect(msk.byDay[0].day).toBe("2026-10-22");
   });
 
+  it("IANA-пояс: Москва совпадает с фиксированным смещением", () => {
+    const beforeWindow = Date.UTC(2026, 9, 21, 23, 0, 0); // 02:00 22 октября по Москве
+    const s = computeStats([{ id: "1", t: "a", a: [[1, "x"]], s: 100, ts: beforeWindow }], { days: 7, now, timeZone: "Europe/Moscow" });
+    expect(s.totalSeconds).toBe(100);
+    expect(s.byDay[0]).toEqual({ day: "2026-10-22", seconds: 100 });
+    expect(s.byDay.at(-1).day).toBe("2026-10-28");
+    expect(s.peakHour).toBe(2);
+  });
+
+  it("IANA-пояс учитывает переход на зимнее время (Нью-Йорк, 1 ноября 2026)", () => {
+    const nyNow = Date.UTC(2026, 10, 3, 17, 0, 0); // 12:00 EST 3 ноября
+    const log = [
+      // 00:30 EDT 30 октября: с текущим смещением EST (-5) ушло бы в 29-е и выпало из окна
+      { id: "1", t: "a", a: [[1, "x"]], s: 100, ts: Date.UTC(2026, 9, 30, 4, 30) },
+      // повторяющийся час 01:00–02:00 1 ноября: сначала EDT, затем EST
+      { id: "2", t: "b", a: [[1, "x"]], s: 30, ts: Date.UTC(2026, 10, 1, 5, 30) },
+      { id: "2", t: "b", a: [[1, "x"]], s: 40, ts: Date.UTC(2026, 10, 1, 6, 30) },
+    ];
+    const zone = computeStats(log, { days: 5, now: nyNow, timeZone: "America/New_York" });
+    expect(zone.byDay.map((d) => d.day)).toEqual(["2026-10-30", "2026-10-31", "2026-11-01", "2026-11-02", "2026-11-03"]);
+    expect(zone.totalSeconds).toBe(170);
+    expect(zone.byDay[0].seconds).toBe(100);
+    expect(zone.byDay[2].seconds).toBe(70);
+    expect(zone.byHour[0]).toBe(100);
+    expect(zone.byHour[1]).toBe(70);
+    // фиксированное смещение даёт ошибку, которую и исправляет пояс
+    const fixed = computeStats(log, { days: 5, now: nyNow, tzOffsetMin: 300 });
+    expect(fixed.totalSeconds).toBe(70);
+  });
+
+  it("неизвестный пояс — откат на смещение", () => {
+    const log = [e("1", [[1, "x"]], 60, 0)];
+    const bad = computeStats(log, { days: 7, now, tzOffsetMin: -180, timeZone: "Mars/Olympus" });
+    expect(bad).toEqual(computeStats(log, { days: 7, now, tzOffsetMin: -180 }));
+  });
+
+  it("серия считается по дням пояса", () => {
+    // 23:30 по Москве 27-го и 00:30 по Москве 28-го — два разных дня, хотя в UTC это один день
+    const s = computeStats(
+      [
+        { id: "1", t: "a", a: [[1, "x"]], s: 60, ts: Date.UTC(2026, 9, 27, 20, 30) },
+        { id: "1", t: "a", a: [[1, "x"]], s: 60, ts: Date.UTC(2026, 9, 27, 21, 30) },
+      ],
+      { days: 7, now, timeZone: "Europe/Moscow" },
+    );
+    expect(s.streak).toBe(2);
+  });
+
   it("пустой журнал", () => {
     const s = computeStats([], { days: 30, now });
     expect(s).toMatchObject({ plays: 0, totalSeconds: 0, streak: 0, peakHour: null });

@@ -139,17 +139,13 @@ export function ArtistPage({ id }) {
 }
 
 export function PlaylistPage({ uid, kind }) {
-  // версия в адресе — способ перечитать плейлист после правки (сервер смотрит только на путь)
-  const [version, setVersion] = useState(0);
-  const { data, loading, error } = useLoad(`/playlist/${uid}/${kind}${version ? `?v=${version}` : ""}`);
+  const { data, loading, error, reload } = useLoad(`/playlist/${uid}/${kind}`);
   if (loading && !data) return <Loading />;
   if (error && !data) return <ErrorState error={error} />;
   const { playlist, tracks } = data;
   const own = me.value?.uid != null && String(me.value.uid) === String(uid);
-  const refresh = () => {
-    dropCache(`/playlist/${uid}/${kind}`);
-    setVersion((v) => v + 1);
-  };
+  // перечитать плейлист после правки на месте: старые данные остаются на экране до прихода новых
+  const refresh = () => reload();
   const ctx = { title: playlist.title, link: `/playlist/${uid}/${kind}`, from: "desktop_win-playlist-playlist-default" };
   const rename = async () => {
     const title = prompt("Новое название плейлиста", playlist.title);

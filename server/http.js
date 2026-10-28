@@ -29,6 +29,11 @@ async function readJson(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
+/** IANA-пояс из запроса (Europe/Moscow); всё подозрительное отбрасываем — тогда считаем по смещению tz. */
+function zoneParam(v) {
+  return typeof v === "string" && v.length <= 64 && /^[A-Za-z0-9_+\-/]+$/.test(v) ? v : null;
+}
+
 export function buildRoutes(svc) {
   return [
     ["GET", /^\/api\/me$/, () => svc.me()],
@@ -58,7 +63,7 @@ export function buildRoutes(svc) {
     ["GET", /^\/api\/prefs$/, () => svc.prefs],
     ["POST", /^\/api\/prefs$/, (q, m, b) => svc.setPrefs(b)],
     ["POST", /^\/api\/history\/clear$/, () => (svc.history.clear(), { ok: true })],
-    ["GET", /^\/api\/stats$/, (q) => svc.stats(Math.min(365, Math.max(1, Number(q.get("days")) || 7)), Math.max(-840, Math.min(840, Number(q.get("tz")) || 0)))],
+    ["GET", /^\/api\/stats$/, (q) => svc.stats(Math.min(365, Math.max(1, Number(q.get("days")) || 7)), Math.max(-840, Math.min(840, Number(q.get("tz")) || 0)), zoneParam(q.get("zone")))],
     ["POST", /^\/api\/stats\/clear$/, () => (svc.playlog.clear(), { ok: true })],
     ["GET", /^\/api\/my\/playlists$/, () => svc.myPlaylists()],
     ["POST", /^\/api\/my\/playlists$/, (q, m, b) => svc.createPlaylist(b.title, b.tracks || [])],
@@ -82,8 +87,10 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
 
     const url = new URL(req.url, "http://local");
     if (url.pathname.startsWith("/api/")) {
-      const given = req.headers["x-ymc-key"] || "";
-      const ok = given.length === key.length && crypto.timingSafeEqual(Buffer.from(given), Buffer.from(key));
+      // сравниваем длины в байтах: не-ASCII заголовок даёт другой размер буфера, и timingSafeEqual бросил бы исключение
+      const given = Buffer.from(String(req.headers["x-ymc-key"] || ""));
+      const expected = Buffer.from(key);
+      const ok = given.length === expected.length && crypto.timingSafeEqual(given, expected);
       if (!ok) return send(403, JSON.stringify({ error: "forbidden" }), { "Content-Type": "application/json" });
       const route = routes.find(([method, re]) => method === req.method && re.test(url.pathname));
       if (!route) return send(404, JSON.stringify({ error: "not found" }), { "Content-Type": "application/json" });
@@ -113,7 +120,10 @@ export function createServer({ svc, staticDir, key = crypto.randomBytes(24).toSt
     const ext = path.extname(file);
     const cache = ext === ".html" ? "no-store" : "public, max-age=31536000, immutable";
     res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream", "Cache-Control": cache });
-    fs.createReadStream(file).pipe(res);
+    // ошибка чтения (файл удалили между проверкой и открытием) не должна ронять процесс
+    fs.createReadStream(file)
+      .on("error", () => res.destroy())
+      .pipe(res);
   });
 
   return {
