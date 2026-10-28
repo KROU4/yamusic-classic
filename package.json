@@ -1,7 +1,7 @@
 {
   "name": "yamusic-classic",
   "productName": "YM Classic",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "description": "Unofficial open-source Yandex Music desktop client for Windows",
   "license": "MIT",
   "private": true,
