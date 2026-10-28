@@ -33,7 +33,7 @@ electron/   main process: window, tray, mini player, hotkeys, autostart, updater
 server/     local API on 127.0.0.1 that proxies Yandex: session lookup, request signing,
             My Wave, anti-repeat rules, uncensor, lyrics, stats, podcasts, Ynison
 src/        Preact + signals UI (pages/, components/, player/, styles/)
-scripts/    dev server, smoke checks, screenshot matrix, icon generation
+scripts/    dev server, smoke checks, screenshot matrix, icon rendering (npx electron scripts/render-icons.cjs)
 test/       vitest unit tests
 ```
 

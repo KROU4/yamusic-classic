@@ -15,7 +15,9 @@ const JOBS = [
 ];
 
 app.disableHardwareAcceleration();
-app.whenReady().then(async () => {
+app
+  .whenReady()
+  .then(async () => {
   const win = new BrowserWindow({ show: false, webPreferences: { offscreen: true } });
   await win.loadURL("data:text/html,<!doctype html><title>icons</title>");
   for (const [src, out, w, h] of JOBS) {
@@ -39,5 +41,11 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(root, out), Buffer.from(data.split(",")[1], "base64"));
     console.log(`${out} ${w}×${h}`);
   }
-  app.quit();
-});
+  })
+  .then(
+    () => app.quit(),
+    (err) => {
+      console.error(err);
+      app.exit(1);
+    },
+  );

@@ -134,30 +134,57 @@ function useRefreshRate() {
 /** The section index: a column at the side in wide windows, a scrolling row on top in narrow ones. */
 function SectionNav({ items }) {
   const [active, setActive] = useState(items[0]?.[0]);
+  const navRef = useRef(null);
+  // a jump from the index keeps its item lit while the page scrolls there (the last sections can't reach the top)
+  const chosen = useRef({ id: null, until: 0 });
+  // as a scrolling row (narrow windows) the current section stays in view; only the row scrolls, never the page
   useEffect(() => {
-    const els = items.map(([id]) => document.getElementById(`st-${id}`)).filter(Boolean);
-    // the section whose top passed the upper third of the view is the current one
-    const io = new IntersectionObserver(
-      (entries) => {
-        const seen = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (seen[0]) setActive(seen[0].target.dataset.section);
-      },
-      { rootMargin: "-90px 0px -60% 0px" },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    const nav = navRef.current;
+    const btn = nav?.querySelector(".st-nav-item.on");
+    if (!nav || !btn || nav.scrollWidth <= nav.clientWidth) return;
+    const left = btn.offsetLeft - nav.offsetLeft;
+    if (left < nav.scrollLeft || left + btn.offsetWidth > nav.scrollLeft + nav.clientWidth) nav.scrollTo({ left: left - (nav.clientWidth - btn.offsetWidth) / 2 });
+  }, [active]);
+  useEffect(() => {
+    const scroller = document.getElementById("main");
+    const nav = navRef.current;
+    if (!scroller || !nav) return;
+    let raf = 0;
+    // the current section is the last one whose top has passed a line just under the index
+    // (under the top bar for the side column); at the very bottom the last section wins
+    const pick = () => {
+      raf = 0;
+      if (chosen.current.until > performance.now()) return setActive(chosen.current.id);
+      const els = items.map(([id]) => document.getElementById(`st-${id}`)).filter(Boolean);
+      if (!els.length) return;
+      const r = nav.getBoundingClientRect();
+      const row = r.width > r.height; // the scrolling row of narrow windows
+      const line = (row ? r.bottom : scroller.getBoundingClientRect().top + 64) + 40;
+      const atEnd = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4;
+      let cur = els[0];
+      for (const el of els) if (el.getBoundingClientRect().top <= line) cur = el;
+      setActive((atEnd ? els[els.length - 1] : cur).dataset.section);
+    };
+    const onScroll = () => (raf ||= requestAnimationFrame(pick));
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    pick();
+    return () => {
+      scroller.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, [items.map(([id]) => id).join()]);
   const go = (id) => {
     const el = document.getElementById(`st-${id}`);
     if (!el) return;
     const calm = calmUi.peek() || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    chosen.current = { id, until: performance.now() + 1200 };
     el.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
     setActive(id);
     // keyboard users land on the section, not back at the index
     el.querySelector("h2")?.focus({ preventScroll: true });
   };
   return (
-    <nav class="st-nav" aria-label="Разделы настроек">
+    <nav class="st-nav" ref={navRef} aria-label="Разделы настроек">
       {items.map(([id, icon, title]) => (
         <button key={id} type="button" class={`st-nav-item ${active === id ? "on" : ""}`} aria-current={active === id ? "true" : undefined} onClick={() => go(id)}>
           <Icon name={icon} size={18} />
@@ -505,7 +532,12 @@ export function SettingsPage({ me, onReconnect }) {
             {notifySupported && (
               <Toggle
                 label="Уведомлять о смене трека"
-                hint="Беззвучное уведомление Windows с обложкой, когда окно свёрнуто или в фоне"
+                hint={
+                  st?.portable
+                    ? "Работает в установленной версии: портативной Windows уведомления не показывает"
+                    : "Беззвучное уведомление Windows с обложкой, когда окно свёрнуто или в фоне"
+                }
+                disabled={!!st?.portable}
                 checked={trackNotify.value}
                 onChange={(v) => {
                   trackNotify.value = v;

@@ -9,9 +9,11 @@ let shown = null;
 
 p.current.subscribe((t) => {
   const id = t?.id ?? null;
-  const changed = id !== lastId;
+  const prev = lastId;
   lastId = id;
-  if (!t || !changed || !trackNotify.peek() || typeof Notification === "undefined") return;
+  if (!t || id === prev || !trackNotify.peek() || typeof Notification === "undefined") return;
+  // the saved queue restored at startup (no track -> a track, paused) is not a track change
+  if (prev === null && !p.playing.peek()) return;
   if (document.hasFocus() || Notification.permission === "denied") return;
   try {
     shown?.close(); // one notification at a time: a fast skip doesn't stack them up

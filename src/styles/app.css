@@ -1916,6 +1916,10 @@ button.player-time:hover {
 .switch:checked::after {
   transform: translateX(18px);
 }
+.switch:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* ---------- misc ---------- */
 .spinner {

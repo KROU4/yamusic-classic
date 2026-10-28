@@ -2,7 +2,7 @@
 // modelled on the look of the official 2024 client (own shader, not its code).
 // Custom WebGL shader; reacts to music via the audio graph analyzer, colors follow the wave's mood.
 // Modes: full (shader), lite (light CSS animation), off (static gradient). Without WebGL — lite.
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { vibeMode, vibeFps, vibeReact } from "../lib/ui.js";
 import { windowVisible } from "../lib/desktop.js";
 import { theme } from "../lib/theme.js";
@@ -201,7 +201,7 @@ function startGl(canvas, getState) {
     sm.pulse = Math.max(0, sm.pulse - dt * 1.6);
     if (st.pulseAt && st.pulseAt !== sm.pulseAt) {
       sm.pulseAt = st.pulseAt;
-      sm.pulse = 1;
+      if (vibeReact.peek()) sm.pulse = 1;
     }
     // smooth palette change when the mood changes
     const target3 = st.colors.map(hex);
@@ -314,7 +314,7 @@ const BLEND_FRAG = `precision mediump float;uniform sampler2D f0;uniform sampler
 void main(){gl_FragColor=mix(texture2D(f0,uv),texture2D(f1,uv),t);}`;
 
 /** Returns { draw(now), stop() } or null when WebGL or requestVideoFrameCallback is missing (the video shows as is). */
-function startBlend(canvas, video, onFirstFrame) {
+function startBlend(canvas, video, onFirstFrame, onLost) {
   if (!("requestVideoFrameCallback" in video)) return null;
   const gl = canvas.getContext("webgl", { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: false });
   if (!gl) return null;
@@ -355,7 +355,9 @@ function startBlend(canvas, video, onFirstFrame) {
   let at = 0; // when the newest frame arrived
   let gap = 40; // smoothed interval between frames, ms (25 fps at 1×; longer when the loop slows down)
   let id = 0;
+  let dead = false;
   const onFrame = (now) => {
+    if (dead) return;
     [prev, cur] = [cur, prev];
     gl.bindTexture(gl.TEXTURE_2D, cur);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
@@ -366,13 +368,20 @@ function startBlend(canvas, video, onFirstFrame) {
     at = now;
     id = video.requestVideoFrameCallback(onFrame);
   };
+  // a lost context (GPU reset, sleep) draws nothing: the owner shows the plain video again
+  const lost = () => {
+    dead = true;
+    video.cancelVideoFrameCallback(id);
+    onLost();
+  };
+  canvas.addEventListener("webglcontextlost", lost);
   id = video.requestVideoFrameCallback(onFrame);
   return {
     draw(now) {
-      if (!frames) return;
+      if (dead || !frames) return;
       // the loop is 1000 px: no point in a bigger canvas, and a smaller box gets a smaller one
       const side = Math.min(1000, Math.round(canvas.clientHeight * (window.devicePixelRatio || 1)));
-      if (side > 0 && canvas.width !== side) {
+      if (side > 0 && (canvas.width !== side || canvas.height !== side)) {
         canvas.width = canvas.height = side;
         gl.viewport(0, 0, side, side);
       }
@@ -385,6 +394,9 @@ function startBlend(canvas, video, onFirstFrame) {
       window.__ymcVibeFrames = (window.__ymcVibeFrames || 0) + 1;
     },
     stop() {
+      // first: loseContext() below fires webglcontextlost later, which must not reach the next owner
+      canvas.removeEventListener("webglcontextlost", lost);
+      dead = true;
       video.cancelVideoFrameCallback(id);
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
@@ -402,6 +414,9 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
   const [blending, setBlending] = useState(false);
   state.current = { playing: !!active && p.playing.value, pulseAt, paused };
 
+  // a new video/canvas (theme or mode change) must not inherit is-blend for even one painted frame
+  useLayoutEffect(() => setBlending(false), [light, smooth]);
+
   // re-runs on a theme switch too: the video element is recreated then
   useEffect(() => {
     const el = box.current;
@@ -415,7 +430,15 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
     setBlending(false);
     if (smooth && canvas.current) {
       try {
-        blend = startBlend(canvas.current, v, () => setBlending(true));
+        blend = startBlend(
+          canvas.current,
+          v,
+          () => setBlending(true),
+          () => {
+            blend = null;
+            setBlending(false);
+          },
+        );
       } catch {
         blend = null; // the plain video stays
       }
@@ -440,7 +463,7 @@ function OfficialVibe({ assets, colors, active, pulseAt, paused }) {
       sm.energy += (target.energy - sm.energy) * (1 - Math.exp(-dt * 5));
       if (st.pulseAt && st.pulseAt !== sm.pulseAt) {
         sm.pulseAt = st.pulseAt;
-        sm.pulse = 1;
+        if (react) sm.pulse = 1;
       }
       sm.pulse = Math.max(0, sm.pulse - dt * 1.4);
       // the orb breathes with the bass and flares on a like; the loop itself runs calmer while paused
