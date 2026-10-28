@@ -275,8 +275,8 @@ function createWindow(url, key) {
   });
 
   win.once("ready-to-show", () => {
-    // запуск из автозагрузки с «Запускать свёрнутым» — окно остаётся в трее
-    const stayHidden = launchedHidden && prefs().startMinimized && !process.env.YMC_SHOTS;
+    // запуск из автозагрузки с «Запускать свёрнутым» — окно остаётся в трее (только если трей есть, иначе окно недостижимо)
+    const stayHidden = launchedHidden && prefs().startMinimized && !!tray && !process.env.YMC_SHOTS;
     if (!stayHidden) win.show();
     updateThumbar();
     log(`окно ${stayHidden ? "готово (в трее)" : "показано"} через ${Date.now() - t0} мс после старта`);
